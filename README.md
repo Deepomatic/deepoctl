@@ -35,6 +35,10 @@ The generated files will have the same name as the original one with a suffix `.
 
 You can also call the `draw` command to additionally generate images and videos with tags and bounding boxes overlayed. The generated media will have the same suffix as for the `infer` command.
 
+```sh
+deepoctl draw your/path/to/a/file/or/directory --recognition_id 123
+```
+
 ## Bugs
 
 Please send bug reports to support@deepomatic.com
