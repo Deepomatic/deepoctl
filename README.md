@@ -16,6 +16,12 @@ pip install git+https://github.com/deepomatic/deepoctl@v0.1 --process-dependency
 
 In order to use models which are deployed in our cloud, you will need to set your application ID and API key in `DEEPOMATIC_APP_ID` and `DEEPOMATIC_API_KEY` environment variables, respectively.
 
+```bash
+$ export DEEPOMATIC_APP_ID = xxxxxxxxxxxx
+$ export DEEPOMATIC_API_KEY = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+
 ## Commands
 
 ### `infer`: Performing inference only
