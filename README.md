@@ -9,7 +9,7 @@ This controler have been made in order to help you interacting with our services
 Requirements: Python 2.7+ or 3.4+
 
 ```sh
-$ pip install git+https://github.com/deepomatic/deepoctl@v0.1 --process-dependency-links
+pip install git+https://github.com/deepomatic/deepoctl@v0.1 --process-dependency-links
 ```
 
 ## Setup
@@ -17,8 +17,8 @@ $ pip install git+https://github.com/deepomatic/deepoctl@v0.1 --process-dependen
 In order to use models which are deployed in our cloud, you will need to set your application ID and API key in `DEEPOMATIC_APP_ID` and `DEEPOMATIC_API_KEY` environment variables, respectively.
 
 ```sh
-$ export DEEPOMATIC_APP_ID = xxxxxxxxxxxx
-$ export DEEPOMATIC_API_KEY = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export DEEPOMATIC_APP_ID=xxxxxxxxxxxx
+export DEEPOMATIC_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 
@@ -29,7 +29,7 @@ $ export DEEPOMATIC_API_KEY = xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 "Inference" is the action of running your algorithm. Performing inference only will generate JSON files with inference results next to your files.
 
 ```sh
-$ deepoctl infer your/path/to/a/file/or/directory --recognition_id 123
+deepoctl infer your/path/to/a/file/or/directory --recognition_id 123
 ```
 
 - The path `your/path/to/a/file/or/directory` can either be an image, a video or a directory. In the later case, `deepoctl` will look for supported images and videos in the directory.
@@ -42,7 +42,7 @@ The generated files will have the same name as the original one with a suffix `.
 You can also call the `draw` command to additionally generate images and videos with tags and bounding boxes overlayed. The generated media will have the same suffix as for the `infer` command.
 
 ```sh
-$ deepoctl draw your/path/to/a/file/or/directory --recognition_id 123
+deepoctl draw your/path/to/a/file/or/directory --recognition_id 123
 ```
 
 ## Bugs
