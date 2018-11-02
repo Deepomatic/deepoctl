@@ -1,6 +1,6 @@
 # Deepomatic Controller
 
-This controller have been made in order to help you interacting with our services via the command line.
+This controller has been made in order to help you interact with our services via the command line.
 
 [![Build Status](https://travis-ci.com/Deepomatic/deepoctl.svg?branch=master)](https://travis-ci.com/Deepomatic/deepoctl)
 
@@ -31,7 +31,7 @@ deepoctl infer your/path/to/a/file/or/directory --recognition_id 123
 
 The generated files will have the same name as the original one with a suffix `.rXXX` (`XXX` being the `recognition_id`) and a `.json` extension.
 
-### `draw`: Drawing bouding boxes
+### `draw`: Drawing bounding boxes
 
 You can also call the `draw` command to additionally generate images and videos with tags and bounding boxes overlayed. The generated media will have the same suffix as for the `infer` command.
 

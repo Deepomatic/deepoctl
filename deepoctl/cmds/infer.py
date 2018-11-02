@@ -33,7 +33,7 @@ def get_inference_results_on_file(workflow, file):
     n_errors = 0
     frame_results = []
     data_point = input_data.open_file(file)
-    logging.info('Drawing on {}'.format(file))
+    logging.info('Infering on {}'.format(file))
     with progressbar.ProgressBar(max_value=data_point.get_frame_number(), redirect_stdout=True) as bar:
         fps = data_point.fps()
         for i, result in enumerate(get_inference_results_on_frames(workflow, data_point)):
