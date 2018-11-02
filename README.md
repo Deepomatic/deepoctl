@@ -8,13 +8,19 @@ This controler has been made in order to help you interact with our services via
 
 Requirements: Python 2.7+ or 3.4+
 
-```
+```sh
 pip install git+https://github.com/deepomatic/deepoctl@v0.1 --process-dependency-links
 ```
 
 ## Setup
 
 In order to use models which are deployed in our cloud, you will need to set your application ID and API key in `DEEPOMATIC_APP_ID` and `DEEPOMATIC_API_KEY` environment variables, respectively.
+
+```sh
+export DEEPOMATIC_APP_ID=xxxxxxxxxxxx
+export DEEPOMATIC_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
 
 ## Commands
 
