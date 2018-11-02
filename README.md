@@ -1,6 +1,6 @@
-# Deepomatic Controler
+# Deepomatic Controller
 
-This controler has been made in order to help you interact with our services via the command line.
+This controller has been made in order to help you interact with our services via the command line.
 
 [![Build Status](https://travis-ci.com/Deepomatic/deepoctl.svg?branch=master)](https://travis-ci.com/Deepomatic/deepoctl)
 
