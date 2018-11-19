@@ -1,8 +1,10 @@
 import argparse
 from deepoctl.cmds.infer import main as infer
 from deepoctl.cmds.draw import main as draw
+from deepoctl.cmds.feedback import main as feedback
 from deepoctl.cmds.blur import main as blur
 from deepoctl.io_data import ImageInputData, VideoInputData, StreamInputData
+
 
 def parse_args(args):
     argparser = argparse.ArgumentParser(prog='deepoctl')
@@ -17,6 +19,9 @@ def parse_args(args):
 
     blur_parser = subparsers.add_parser('blur', help="Generate new images and videos with inference results blurred out. Runs inference if JSON has not yet been generated.")
     blur_parser.set_defaults(func=blur)
+
+    feedback_parser = subparsers.add_parser('feedback', help='Send images from a folder to deepomatic studio')
+    feedback_parser.set_defaults(func=feedback, recursive=False)
 
     parsers = [infer_parser, draw_parser, blur_parser]
     for parser in parsers:
@@ -35,6 +40,11 @@ def parse_args(args):
 
     blur_parser.add_argument('--blur_method', help="Blur method if blur output", default="pixel")
     blur_parser.add_argument('--blur_strength', help="Blur method if blur output", default=10)
+
+    feedback_parser.add_argument('dataset_name', type=str, help='the name of the dataset')
+    feedback_parser.add_argument('org_slug', type=str, help='the slug of your organization')
+    feedback_parser.add_argument('path', type=str, nargs='+', help='path to a file or a folder')
+    feedback_parser.add_argument('--recursive', dest='recursive', action='store_true', help='all files in subdirectory')
 
     return argparser.parse_args(args)
 
