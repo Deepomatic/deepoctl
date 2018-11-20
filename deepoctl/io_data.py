@@ -2,104 +2,151 @@ import os
 import sys
 import json
 import imutils
+import logging
 import cv2
+import time
 import threading
+from progressbar import UnknownLength, ProgressBar
+
 try: 
     from Queue import Queue, LifoQueue, Empty
 except ImportError:
     from queue import Queue, LifoQueue, Empty
 
-def get_input(descriptor):
+INPUT_QUEUE_MAX_SIZE = 50
+
+def print_log(log):
+    sys.stdout.write("\033[F") 
+    sys.stdout.write("\033[K")
+    print(log)
+
+def get_input(descriptor, kwargs):
     if (descriptor is None):
         raise NameError('No input specified. use -i flag')
     elif os.path.exists(descriptor):
         if os.path.isfile(descriptor):
             if ImageInputData.is_valid(descriptor):
-                return ImageInputData(descriptor)
+                return ImageInputData(descriptor, **kwargs)
             elif VideoInputData.is_valid(descriptor):
-                return VideoInputData(descriptor)
+                return VideoInputData(descriptor, **kwargs)
             else:
                 raise NameError('Unsupported input file type')
         elif os.path.isdir(descriptor):
-            return DirectoryInputData(descriptor)
+            return DirectoryInputData(descriptor, **kwargs)
         else:
             raise NameError('Unknown input path')
     elif descriptor.isdigit():
-        return DeviceInputData(descriptor)
+        return DeviceInputData(descriptor, **kwargs)
     elif StreamInputData.is_valid(descriptor):
-        return StreamInputData(descriptor)
+        return StreamInputData(descriptor, **kwargs)
     else:
         raise NameError('Unknown input')
 
-def get_output(descriptor, args):
+def get_output(descriptor, kwargs):
     if descriptor is not None:
         if os.path.isdir(descriptor):
-            return DirectoryOutputData(descriptor, **args)
+            return DirectoryOutputData(descriptor, **kwargs)
         elif ImageOutputData.is_valid(descriptor):
-            return ImageOutputData(descriptor, **args)
+            return ImageOutputData(descriptor, **kwargs)
         elif VideoOutputData.is_valid(descriptor):
-            return VideoOutputData(descriptor, **args)
+            return VideoOutputData(descriptor, **kwargs)
         elif JsonOutputData.is_valid(descriptor):
-            return JsonOutputData(descriptor, **args)
+            return JsonOutputData(descriptor, **kwargs)
         elif descriptor == 'stdout':
-            return StdOutputData(**args)
+            return StdOutputData(**kwargs)
         elif descriptor == 'window':
-            return DisplayOutputData(**args)
+            return DisplayOutputData(**kwargs)
         else:
             raise NameError('Unknown output')
     else:
-        return DisplayOutputData(**args)
+        return DisplayOutputData(**kwargs)
 
-def input_loop(args, worker_thread):
-    inputs = get_input(args.get('input', 0))
+def input_loop(kwargs, worker_thread):
+    inputs = get_input(kwargs.get('input', 0), kwargs)
 
-    # For realtime, queue should be LIFO
-    input_queue = LifoQueue() if inputs.is_infinite() else Queue()
-    output_queue = LifoQueue() if inputs.is_infinite() else Queue()
 
-    worker = worker_thread(input_queue, output_queue, **args)
-    output_thread = OutputThread(output_queue, **args)
+    max_value = inputs.get_frame_count()
+    if max_value < 0:
+        max_value = UnknownLength
 
-    worker.start()
-    output_thread.start()
+    with ProgressBar(max_value=max_value, redirect_stdout=True) as bar:
+        # For realtime, queue should be LIFO
+        input_queue = LifoQueue() if inputs.is_infinite() else Queue()
+        output_queue = LifoQueue() if inputs.is_infinite() else Queue()
 
-    for frame in inputs:
-        if inputs.is_infinite():
-            # Discard all previous inputs
+        worker = worker_thread(input_queue, output_queue, **kwargs)
+        output_thread = OutputThread(output_queue, on_progress=lambda i: bar.update(i), **kwargs)
+
+        worker.start()
+        output_thread.start()
+
+        try:
+            for frame in inputs:
+                if inputs.is_infinite():
+                    # Discard all previous inputs
+                    while not input_queue.empty():
+                        try:
+                            input_queue.get(False)
+                            input_queue.task_done()
+                        except Empty:
+                            break
+
+                while input_queue.qsize() > INPUT_QUEUE_MAX_SIZE:
+                    time.sleep(1)
+
+                input_queue.put(frame)
+
+            # notify worker_thread that input stream is over
+            input_queue.put(None)
+
+            worker.join()
+            output_thread.join()
+
+        except KeyboardInterrupt:
+            logging.info('Stopping input')
             while not input_queue.empty():
                 try:
                     input_queue.get(False)
+                    input_queue.task_done()
                 except Empty:
-                    continue
-                input_queue.task_done()
-        input_queue.put(frame)
+                    break
+            input_queue.put(None)
 
-    # notify worker_thread that input stream is over
-    input_queue.put(None)
-    
-    worker.join()
-    output_thread.join()
+            worker.join()
+            output_thread.join()
 
 class OutputThread(threading.Thread):
-    def __init__(self, queue, **kwargs):
+    def __init__(self, queue, on_progress=None, **kwargs):
         threading.Thread.__init__(self, args=(), kwargs=None)
         self.queue = queue
         self.args = kwargs
+        self.on_progress = on_progress
 
     def run(self):
+        i = 0
         with get_output(self.args.get('output', None), self.args) as output:
-            while True:
-                data = self.queue.get()
-                if data is None:
+            try:
+                while True:
+                    i += 1
+                    data = self.queue.get()
+                    if data is None:
+                        self.queue.task_done()
+                        return
+
+                    output(*data)
+                    if (self.on_progress is not None):
+                        self.on_progress(i)
                     self.queue.task_done()
-                    return
-                frame, detection = data
-                output(frame, detection)
-                self.queue.task_done()
+            except KeyboardInterrupt:
+                pass
 
 class InputData(object):
-    def __init__(self, descriptor):
+    def __init__(self, descriptor,  **kwargs):
         self._descriptor = descriptor
+        self._args = kwargs
+        self._name, _ = os.path.splitext(os.path.basename(str(descriptor)))
+        recognition_id = kwargs.get('recognition_id', '')
+        self._reco = '' if recognition_id is None else recognition_id
 
     def __iter__(self):
         return self
@@ -111,13 +158,19 @@ class InputData(object):
         raise StopIteration
 
     def get_fps(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    def get_frame_number(self):
-        raise NotImplementedError
+    def get_frame_name(self):
+        raise NotImplementedError()
+
+    def get_frame_index(self):
+        raise NotImplementedError()
+
+    def get_frame_count(self):
+        raise NotImplementedError()
 
     def is_infinite(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
 
 class ImageInputData(InputData):
@@ -128,25 +181,32 @@ class ImageInputData(InputData):
         _, ext = os.path.splitext(descriptor)
         return os.path.exists(descriptor) and ext in cls.supported_formats
 
-    def __init__(self, descriptor):
-        super(ImageInputData, self).__init__(descriptor)
-        self.first = None
+    def __init__(self, descriptor, **kwargs):
+        super(ImageInputData, self).__init__(descriptor, **kwargs)
+        self._first = None
+        self._name = '%s_%s' % (self._name, self._reco)
 
     def __iter__(self):
-        self.first = True
+        self._first = True
         return self
 
     def next(self):
-        if self.first:
-            self.first = False
-            return cv2.imread(self._descriptor, 1)
+        if self._first:
+            self._first = False
+            return self._name, cv2.imread(self._descriptor, 1)
         else:
             raise StopIteration
 
     def get_fps(self):
         return 0
 
-    def get_frame_number(self):
+    def get_frame_name(self):
+        return self._name
+
+    def get_frame_index(self):
+        return 0 if self._first else 1
+
+    def get_frame_count(self):
         return 1
 
     def is_infinite(self):
@@ -161,32 +221,46 @@ class VideoInputData(InputData):
         _, ext = os.path.splitext(descriptor)
         return os.path.exists(descriptor) and ext in cls.supported_formats
 
-    def __init__(self, descriptor):
-        super(VideoInputData, self).__init__(descriptor)
+    def __init__(self, descriptor, **kwargs):
+        super(VideoInputData, self).__init__(descriptor, **kwargs)
         self._cap = None
+        self._i = 0
+        self._name = '%s_%s_%s' % (self._name, '%05d', self._reco)
+        self._cap = cv2.VideoCapture(self._descriptor)
 
     def __iter__(self):
-        if (self._cap is not None):
+        if self._cap is not None:
             self._cap.release()
         self._cap = cv2.VideoCapture(self._descriptor)
+        self._i = 0
         return self
 
     def next(self):
-        if (self._cap.isOpened()):
+        if self._cap.isOpened():
             _, frame = self._cap.read()
             if frame is None:
                 self._cap.release()
                 raise StopIteration
             else:
-                return frame
+                self._i += 1
+                return self._name % self._i, frame
         self._cap.release()
         raise StopIteration
 
     def get_fps(self):
-        return self._cap.get(cv2.CAP_PROP_FPS)
+        if (self._cap is not None):
+            return self._cap.get(cv2.CAP_PROP_FPS)
+        else:
+            return None
 
-    def get_frame_number(self):
-        return self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    def get_frame_index(self):
+        return self._i
+
+    def get_frame_count(self):
+        if (self._cap is not None):
+            return self._cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        else:
+            return None
 
     def is_infinite(self):
         return False
@@ -196,36 +270,40 @@ class DirectoryInputData(InputData):
     def is_valid(cls, descriptor):
         return (os.path.exists(descriptor) and os.path.isdir(descriptor))
 
-    def __init__(self, descriptor):
-        super(DirectoryInputData, self).__init__(descriptor)
+    def __init__(self, descriptor, **kwargs):
+        super(DirectoryInputData, self).__init__(descriptor, **kwargs)
         self._current = None
         self._files = []
         self._inputs = []
-        if (self.is_valid(descriptor)):
-            print('valid', os.listdir(descriptor))
+        self._i = 0
+
+        if self.is_valid(descriptor):
             _paths = [os.path.join(descriptor, name) for name in os.listdir(descriptor)]
             _files = [
-                ImageInputData(path) if ImageInputData.is_valid(path) else
-                VideoInputData(path) if VideoInputData.is_valid(path) else
+                ImageInputData(path, **kwargs) if ImageInputData.is_valid(path) else
+                VideoInputData(path, **kwargs) if VideoInputData.is_valid(path) else
                 None for path in _paths if os.path.isfile(path)]
             self._inputs = [_input for _input in _files if _input is not None]
 
     def _gen(self):
         for source in self._inputs:
             for frame in source:
+                self._i += 1
                 yield frame
+
     def __iter__(self):
         self.gen = self._gen()
+        self._i = 0
         return self
 
     def next(self):
-        try:
-            return next(self.gen)
-        except StopIteration:
-            return None
+        return next(self.gen)
 
-    def get_frame_number(self):
-        return sum([_input.get_frame_number() for _input in self._inputs])
+    def get_frame_index(self):
+        return self._i
+
+    def get_frame_count(self):
+        return sum([_input.get_frame_count() for _input in self._inputs])
     
     def get_fps(self):
         return 1
@@ -240,8 +318,12 @@ class StreamInputData(VideoInputData):
     def is_valid(cls, descriptor):
         return '://' in descriptor and descriptor.split('://')[0] in cls.supported_protocols
 
-    def __init__(self, descriptor):
-        super(StreamInputData, self).__init__(descriptor)
+    def __init__(self, descriptor, **kwargs):
+        super(StreamInputData, self).__init__(descriptor, **kwargs)
+        self._name = 'stream_%s_%s' % ('%05d', self._reco)
+
+    def get_frame_count(self):
+        return -1
 
     def is_infinite(self):
         return True
@@ -252,8 +334,12 @@ class DeviceInputData(VideoInputData):
     def is_valid(cls, descriptor):
         return descriptor.isdigit()
 
-    def __init__(self, descriptor):
-        super(DeviceInputData, self).__init__(int(descriptor))
+    def __init__(self, descriptor, **kwargs):
+        super(DeviceInputData, self).__init__(int(descriptor), **kwargs)
+        self._name = 'device%s_%s_%s' % (descriptor, '%05d', self._reco)
+
+    def get_frame_count(self):
+        return -1
 
     def is_infinite(self):
         return True
@@ -264,13 +350,13 @@ class OutputData(object):
         self._args = kwargs
 
     def __enter__(self):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def __exit__(self, exception_type, exception_value, traceback):
-        raise NotImplementedError
+        raise NotImplementedError()
 
-    def __call__(self, frame, prediction):
-        raise NotImplementedError
+    def __call__(self, name, frame, prediction):
+        raise NotImplementedError()
 
 
 class ImageOutputData(OutputData):
@@ -292,7 +378,7 @@ class ImageOutputData(OutputData):
     def __exit__(self, exception_type, exception_value, traceback):
         pass
 
-    def __call__(self, frame, prediction):
+    def __call__(self, name, frame, prediction):
         path = self._descriptor
         try:
             path = path % self._i
@@ -300,7 +386,11 @@ class ImageOutputData(OutputData):
             pass
         finally:
             self._i += 1
-            cv2.imwrite(path, frame)
+            if (frame is None):
+                logging.warning('No frame to output.')
+            else:
+                print_log('Writing %s' % path)
+                cv2.imwrite(path, frame)
 
 
 class VideoOutputData(OutputData):
@@ -323,24 +413,54 @@ class VideoOutputData(OutputData):
         self._writer = None
 
     def __enter__(self):
-        if (self._writer is not None):
+        if self._writer is not None:
             self._writer.release()
         self._writer = None
         return self
     
     def __exit__(self, exception_type, exception_value, traceback):
-        if (self._writer is not None):
+        if self._writer is not None:
             self._writer.release()
         self._writer = None
 
-    def __call__(self, frame, prediction):
-        if (self._writer is None):
-            self._writer = cv2.VideoWriter(self._descriptor, 
-                self._fourcc,
-                self._fps,
-                (frame.shape[1], frame.shape[0]))
-        self._writer.write(frame)
+    def __call__(self, name, frame, prediction):
+        if frame is None:
+            logging.warning('No frame to output.')
+        else:
+            if self._writer is None:
+                print_log('Writing %s' % self._descriptor)
+                self._writer = cv2.VideoWriter(self._descriptor, 
+                    self._fourcc,
+                    self._fps,
+                    (frame.shape[1], frame.shape[0]))
+            self._writer.write(frame)
 
+class DirectoryOutputData(OutputData):
+    @classmethod
+    def is_valid(cls, descriptor):
+        return (os.path.exists(descriptor) and os.path.isdir(descriptor))
+
+    def __init__(self, descriptor, **kwargs):
+        super(DirectoryOutputData, self).__init__(descriptor, **kwargs)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        pass
+
+    def __call__(self, name, frame, prediction):
+        path = os.path.join(self._descriptor, name)
+        if (frame is None):
+            if (prediction is None):
+                pass
+            else:
+                with open('%s.json' % path, 'w') as file:
+                    print_log('Writing %s.json' % path)
+                    json.dump(prediction, file)
+        else:
+            print_log('Writing %s.jpeg' % path)
+            cv2.imwrite('%s.jpeg' % path, frame)
 
 class DrawOutputData(OutputData):
 
@@ -349,16 +469,16 @@ class DrawOutputData(OutputData):
         self._draw_labels = kwargs.get('draw_labels', False)
         self._draw_scores = kwargs.get('draw_scores', False)
 
-    def __call__(self, frame, prediction, font_scale=0.5):
+    def __call__(self, name, frame, prediction, font_scale=0.5):
         frame = frame.copy()
         h = frame.shape[0]
         w = frame.shape[1]
         for predicted in prediction:
-            label = ""
+            label = ''
             if self._draw_labels:
                 label += predicted['label_name']
             if self._draw_labels and self._draw_scores:
-                label += " "
+                label += ' '
             if self._draw_scores:
                 label += str(predicted['score'])
 
@@ -377,7 +497,7 @@ class DrawOutputData(OutputData):
                 ret, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 1)
                 cv2.rectangle(frame, (xmin, ymax - ret[1] - baseline), (xmin + ret[0], ymax), (0, 0, 255), -1)
                 cv2.putText(frame, label, (xmin, ymax - baseline), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 1)
-        return frame, prediction
+        return name, frame, prediction
 
     def __enter__(self):
         return self
@@ -391,7 +511,7 @@ class BlurOutputData(OutputData):
         self._method = kwargs.get('blur_method', 'pixel')
         self._strength = int(kwargs.get('blur_strength', 10))
 
-    def __call__(self, frame, prediction, font_scale=0.5):
+    def __call__(self, name, frame, prediction, font_scale=0.5):
         frame = frame.copy()
         h = frame.shape[0]
         w = frame.shape[1]
@@ -417,7 +537,7 @@ class BlurOutputData(OutputData):
                         small = cv2.resize(face, (0,0), fx=1./min((xmax - xmin), self._strength), fy=1./min((ymax - ymin), self._strength))
                         face = cv2.resize(small, ((xmax - xmin), (ymax - ymin)), interpolation=cv2.INTER_NEAREST)
                     frame[ymin:ymax, xmin:xmax] = face
-        return frame, prediction
+        return name, frame, prediction
 
     def __enter__(self):
         return self
@@ -425,16 +545,18 @@ class BlurOutputData(OutputData):
         pass
 
 class StdOutputData(OutputData):
-    """
-        To use with vlc : python scripts/deepoctl draw -i 0 -o stdout | vlc --demux=rawvideo --rawvid-fps=25 --rawvid-width=640 --rawvid-height=480 --rawvid-chroma=RV24 - --sout "#display"
-    """
+    '''
+        To use with vlc : python scripts/deepoctl draw -i 0 -o stdout | vlc --demux=rawvideo --rawvid-fps=25 --rawvid-width=640 --rawvid-height=480 --rawvid-chroma=RV24 - --sout '#display'
+    '''
     def __init__(self, **kwargs):
         super(StdOutputData, self).__init__(None, **kwargs)
-        self._output_frame = kwargs.get('output_frame', False)
 
-    def __call__(self, frame, prediction):
-        data = frame[:, :, ::-1].tostring() if self._output_frame else json.dumps(prediction)
-        sys.stdout.write(data)
+    def __call__(self, name, frame, prediction):
+        if frame is None:
+            print(json.dumps(prediction))
+        else:
+            sys.stdout.write(frame[:, :, ::-1].tostring())
+
 
     def __enter__(self):
         return self
@@ -445,7 +567,7 @@ class DisplayOutputData(OutputData):
     def __init__(self, **kwargs):
         super(DisplayOutputData, self).__init__(None, **kwargs)
         self._fps = kwargs.get('output_fps', 25)
-        self._window_name = "Deepomatic"
+        self._window_name = 'Deepomatic'
         self._fullscreen = kwargs.get('fullscreen', False)
 
         if self._fullscreen:
@@ -455,17 +577,20 @@ class DisplayOutputData(OutputData):
             elif imutils.is_cv3():
                 prop_value = cv2.WINDOW_FULLSCREEN
             else:
-                assert("Unsupported opencv version")
+                assert('Unsupported opencv version')
             cv2.setWindowProperty(self._window_name,
                                   cv2.WND_PROP_FULLSCREEN,
                                   prop_value)
 
-    def __call__(self, frame, prediction):
-        cv2.imshow(self._window_name, frame)
-        if cv2.waitKey(self._fps) & 0xFF == ord('q'):
-            cv2.destroyAllWindows()
-            cv2.waitKey(1)
-            sys.exit()
+    def __call__(self, name, frame, prediction):
+        if frame is None:
+            logging.warning('No frame to output.')
+        else:
+            cv2.imshow(self._window_name, frame)
+            if cv2.waitKey(self._fps) & 0xFF == ord('q'):
+                cv2.destroyAllWindows()
+                cv2.waitKey(1)
+                sys.exit()
 
     def __enter__(self):
         return self
@@ -494,7 +619,7 @@ class JsonOutputData(OutputData):
     def __exit__(self, exception_type, exception_value, traceback):
         pass
 
-    def __call__(self, frame, prediction):
+    def __call__(self, name, frame, prediction):
         path = self._descriptor
         try:
             path = path % self._i
@@ -503,4 +628,5 @@ class JsonOutputData(OutputData):
         finally:
             self._i += 1
             with open(path, 'w') as file:
+                print_log('Writing %s' % path)
                 json.dump(prediction, file)

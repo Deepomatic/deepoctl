@@ -59,7 +59,9 @@ class CloudRecognition(AbstractWorkflow):
         app_id = os.getenv('DEEPOMATIC_APP_ID', None)
         api_key = os.getenv('DEEPOMATIC_API_KEY', None)
         if app_id is None or api_key is None:
-            raise common.DeepoCTLException('Please define the environment variables DEEPOMATIC_APP_ID and DEEPOMATIC_API_KEY to use cloud-based recognition models.')
+            error = 'Please define the environment variables DEEPOMATIC_APP_ID and DEEPOMATIC_API_KEY to use cloud-based recognition models.'
+            logging.error(error)
+            raise common.DeepoCTLException(error)
         self._client = deepomatic.Client(app_id, api_key)
         self._model = None
         try:
@@ -105,8 +107,12 @@ class RpcRecognition(AbstractWorkflow):
                 recognition_version_id = int(recognition_version_id)
                 self._recognition = self._client.create_recognition(version_id=recognition_version_id)
             except ValueError:
-                logging.warning("Cannot cast recognition ID into a number")
+                logging.error("Cannot cast recognition ID into a number")
+            except Exception:
+                logging.exception("Error creating RPC client")
+
         else:
+            self._client = None
             logging.error('RPC not available')
 
     def infer(self, frame):

@@ -5,6 +5,10 @@ import threading
 import logging
 import datetime
 import progressbar
+try: 
+    from Queue import Empty
+except ImportError:
+    from queue import Empty
 
 import deepoctl.io_data as io_data
 import deepoctl.workflow_abstraction as wa
@@ -20,33 +24,42 @@ class InferenceThread(threading.Thread):
         self._threshold = kwargs.get('threshold', 0.7)
     
     def run(self):
-        while True:
-            frame = self.input_queue.get()
+        try:
+            while True:
+                data = self.input_queue.get()
 
-            if frame is None:
+                if data is None:
+                    self.input_queue.task_done()
+                    self.output_queue.put(None)
+                    return
+
+                name, frame = data
+                if self.workflow is not None:
+                    prediction = self.workflow.infer(frame).get()
+                    prediction = [predicted
+                        for predicted in prediction['outputs'][0]['labels']['predicted']
+                        if float(predicted['score']) >= float(self._threshold)]
+                else:
+                    prediction = []
+                
+                result = self.processing(name, frame, prediction)
                 self.input_queue.task_done()
-                self.output_queue.put(None)
-                return
+                self.output_queue.put(result)
+        except KeyboardInterrupt:
+            logging.info('Stopping output')
+            while not self.output_queue.empty():
+                try:
+                    self.output_queue.get(False)
+                except Empty:
+                    break
+                self.output_queue.task_done()
+            self.output_queue.put(None)
 
-            if self.workflow is not None:
-                prediction = self.workflow.infer(frame).get()
-                prediction = [predicted
-                    for predicted in prediction['outputs'][0]['labels']['predicted']
-                    if float(predicted['score']) >= float(self._threshold)]
-            else:
-                prediction = []
-            
-            result = self.processing(frame, prediction)
-            self.input_queue.task_done()
-            self.output_queue.put(result)
-
-    def processing(self, frame, prediction):
-        return frame, prediction
+    def processing(self, name, frame, prediction):
+        return name, None, prediction
 
 def main(args, force=False):
     try:
         io_data.input_loop(args, InferenceThread)
     except KeyboardInterrupt:
         pass
-    except:
-        logging.error("Unexpected error: %s" % sys.exc_info()[0])
