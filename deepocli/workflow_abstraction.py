@@ -1,9 +1,10 @@
 import os
 import logging
 import datetime
-import deepomatic
 import cv2
-from deepomatic.exceptions import TaskTimeout, TaskError
+import deepomatic.api.client
+import deepomatic.api.inputs
+import deepomatic.api.exceptions
 
 import deepocli.common as common
 
@@ -11,9 +12,10 @@ import deepocli.common as common
 can_use_rpc = True
 
 try:
-    from worker_nn.client import Client, BINARY_IMAGE_PREFIX, has_labels, has_scalar, Result, CallbackCache
-    from worker_nn.buffers.protobuf.nn.v07.Inputs_pb2 import ImageInput, Inputs
-    from worker_nn.buffers.protobuf.common.Image_pb2 import BBox
+    import deepomatic.rpc.client
+    from deepomatic.rpc.buffers.protobuf.nn.v07.Inputs_pb2 import ImageInput as RPCImageInput
+    from deepomatic.rpc.buffers.protobuf.nn.v07.Inputs_pb2 import Inputs as RPCInputs
+    from deepomatic.rpc.buffers.protobuf.common.Image_pb2 import BBox as RPCBBox
     from google.protobuf.json_format import MessageToDict
 except ImportError:
     can_use_rpc = False
@@ -49,7 +51,7 @@ class CloudRecognition(AbstractWorkflow):
         def get(self):
             try:
                 return self._task.wait().data()['data']
-            except (TaskTimeout, TaskError) as e:
+            except (deepomatic.api.exceptions.TaskTimeout, deepomatic.api.exceptions.TaskError) as e:
                 return None
 
     def __init__(self, recognition_version_id):
@@ -62,7 +64,7 @@ class CloudRecognition(AbstractWorkflow):
             error = 'Please define the environment variables DEEPOMATIC_APP_ID and DEEPOMATIC_API_KEY to use cloud-based recognition models.'
             logging.error(error)
             raise common.DeepoCLIException(error)
-        self._client = deepomatic.Client(app_id, api_key)
+        self._client = deepomatic.api.client.Client(app_id, api_key)
         self._model = None
         try:
             recognition_version_id = int(recognition_version_id)
@@ -74,7 +76,7 @@ class CloudRecognition(AbstractWorkflow):
 
     def infer(self, frame):
         _, buf = cv2.imencode('.jpeg', frame)
-        return self.InferResult(self._model.inference(inputs=[deepomatic.ImageInput(buf.tobytes(), encoding="binary")], return_task=True, wait_task=False))
+        return self.InferResult(self._model.inference(inputs=[deepomatic.api.inputs.ImageInput(buf.tobytes(), encoding="binary")], return_task=True, wait_task=False))
 
 # ---------------------------------------------------------------------------- #
 
@@ -101,7 +103,7 @@ class RpcRecognition(AbstractWorkflow):
         self._routing_key = routing_key
 
         if can_use_rpc:
-            self._client = Client(self._amqp_url, max_callback=4)
+            self._client = deepomatic.rpc.client.Client(self._amqp_url, max_callback=4)
             self._recognition = None
             try:
                 recognition_version_id = int(recognition_version_id)
@@ -118,8 +120,8 @@ class RpcRecognition(AbstractWorkflow):
     def infer(self, frame):
         if (self._client is not None and frame is not None):
             _, buf = cv2.imencode('.jpeg', frame)
-            image = ImageInput(source=BINARY_IMAGE_PREFIX + buf.tobytes(), crop_uniform_background=False)
-            inputs = Inputs(inputs=[Inputs.InputMix(image=image)])
+            image = RPCImageInput(source=deepomatic.rpc.client.BINARY_IMAGE_PREFIX + buf.tobytes(), crop_uniform_background=False)
+            inputs = RPCInputs(inputs=[RPCInputs.InputMix(image=image)])
             return self.InferResult(self._client.recognize(self._routing_key, self._recognition, inputs))
         else:
             logging.error('RPC not available')
