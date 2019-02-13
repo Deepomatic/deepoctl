@@ -26,9 +26,9 @@ def argparser_init():
 
     parsers = [infer_parser, draw_parser, blur_parser]
     for parser in parsers:
-        parser.add_argument('-i', '--input', help="Path on which inference should be run. It can be an image (supported formats: *{}), a video (supported formats: *{}) or a directory. If the given path is a directory, it will recursively run inference on all the supported files in this directory.".format(', *'.join(ImageInputData.supported_formats), ', *'.join(VideoInputData.supported_formats)))
-        parser.add_argument('-o', '--output', help="Path in which output should be written. It can be an image (supported formats: *{}), a video (supported formats: *{}) or a directory.".format(', *'.join(ImageInputData.supported_formats), ', *'.join(VideoInputData.supported_formats)))
-        parser.add_argument('-r', '--recognition_id', help="Neural network recognition version ID.")
+        parser.add_argument('-i', '--input', required=True, help="Path on which inference should be run. It can be an image (supported formats: *{}), a video (supported formats: *{}) or a directory. If the given path is a directory, it will recursively run inference on all the supported files in this directory.".format(', *'.join(ImageInputData.supported_formats), ', *'.join(VideoInputData.supported_formats)))
+        parser.add_argument('-o', '--output', required=True, help="Path in which output should be written. It can be an image (supported formats: *{}), a video (supported formats: *{}) or a directory.".format(', *'.join(ImageInputData.supported_formats), ', *'.join(VideoInputData.supported_formats)))
+        parser.add_argument('-r', '--recognition_id', required=True, help="Neural network recognition version ID.")
         parser.add_argument('-u', '--amqp_url', help="AMQP url for on-premises deployments.")
         parser.add_argument('-k', '--routing_key', help="Recognition routing key for on-premises deployments.")
         parser.add_argument('-t', '--threshold', help="Threshold above which a prediction is considered valid.", default=0.7)
@@ -38,11 +38,11 @@ def argparser_init():
     draw_parser.add_argument('--draw_scores', help="Overlays the prediction scores.", action="store_true")
     draw_parser.add_argument('--draw_labels', help="Overlays the prediction labels.", action="store_true")
 
-    blur_parser.add_argument('--blur_method', help="Blur method to apply, either 'pixel', 'gaussian' or 'black'. Defaults to 'pixel'.", default="pixel")
-    blur_parser.add_argument('--blur_strength', help="Blur strength, defaults to 10.", default=10)
+    blur_parser.add_argument('--blur_method', required=True, help="Blur method to apply, either 'pixel', 'gaussian' or 'black'.", choices=['pixel', 'gaussian', 'black'])
+    blur_parser.add_argument('--blur_strength', required=True, help="Blur strength")
 
-    feedback_parser.add_argument('-d', '--dataset', help="Deepomatic Studio dataset name.", type=str)
-    feedback_parser.add_argument('-o', '--organization', help="Deepomatic Studio organization slug.", type=str)
+    feedback_parser.add_argument('-d', '--dataset', required=True, help="Deepomatic Studio dataset name.", type=str)
+    feedback_parser.add_argument('-o', '--organization', required=True, help="Deepomatic Studio organization slug.", type=str)
     feedback_parser.add_argument('path', type=str, nargs='+', help='Path to an image file, images directory or json file or directory.')
     feedback_parser.add_argument('--recursive', dest='recursive', action='store_true', help='Goes through all files in subdirectories.')
     feedback_parser.add_argument('--json', dest='json_file', action='store_true', help='Look for JSON files instead of images.')
