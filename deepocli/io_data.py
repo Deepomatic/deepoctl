@@ -16,8 +16,6 @@ except ImportError:
 INPUT_QUEUE_MAX_SIZE = 50
 
 def print_log(log):
-    sys.stdout.write("\033[F") 
-    sys.stdout.write("\033[K")
     print(log)
 
 def get_input(descriptor, kwargs):
