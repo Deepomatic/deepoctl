@@ -1,3 +1,4 @@
+import sys
 import argparse
 from deepocli.cmds.infer import main as infer
 from deepocli.cmds.draw import main as draw
@@ -6,7 +7,7 @@ from deepocli.cmds.blur import main as blur
 from deepocli.io_data import ImageInputData, VideoInputData, StreamInputData
 
 
-def parse_args(args):
+def argparser_init():
     argparser = argparse.ArgumentParser(prog='deepo')
     subparsers = argparser.add_subparsers(dest='command')
     subparsers.required = True
@@ -46,8 +47,17 @@ def parse_args(args):
     feedback_parser.add_argument('--recursive', dest='recursive', action='store_true', help='all files in subdirectory')
     feedback_parser.add_argument('--json', dest='json_file', action='store_true', help='dataset described by json files')
 
-    return argparser.parse_args(args)
+    return argparser
 
 def run(args):
-    args = parse_args(args)
-    args.func(vars(args))
+    # Initialize the argparser
+    argparser = argparser_init()
+
+    # Display the help section if no arguments are supplied
+    if len(sys.argv)==1:
+        argparser.print_help(sys.stderr)
+        sys.exit(1)
+    # Otherwise parse the arguments and run the command
+    else:
+        args = argparser.parse_args(args)
+        args.func(vars(args))
