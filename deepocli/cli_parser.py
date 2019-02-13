@@ -7,8 +7,18 @@ from deepocli.cmds.blur import main as blur
 from deepocli.io_data import ImageInputData, VideoInputData, StreamInputData
 
 
+class ParserWithHelpOnError(argparse.ArgumentParser):
+    """
+    Modifies argparser to display the help whenever an error is triggered.
+    """
+    def error(self, message):
+        sys.stderr.write('error: %s\n' % message)
+        self.print_help()
+        sys.exit(2)
+
+
 def argparser_init():
-    argparser = argparse.ArgumentParser(prog='deepo')
+    argparser = ParserWithHelpOnError(prog='deepo')
     subparsers = argparser.add_subparsers(dest='command', help='')
     subparsers.required = True
 
