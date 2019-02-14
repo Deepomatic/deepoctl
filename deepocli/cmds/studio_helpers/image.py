@@ -92,26 +92,30 @@ class Image(object):
                     tqdm.write("Can't read file {}, skipping...".format(file))
                     continue
 
-                if isinstance(json_objects, dict):
-                    if 'location' not in json_objects:
-                        for ext in ('bmp', 'jpeg', 'jpg', 'jpe', 'png'):
-                            tmp_path = os.path.join(os.path.dirname(file), os.path.basename(file).replace('json', ext))
-                            if os.path.isfile(tmp_path):
-                                json_objects['location'] = tmp_path
-                                json_objects = [json_objects]
-                                break
-                        else:
-                            tqdm.write("Can't find an image for json {}".format(os.path.basename(file)))
-                            continue
+                # Check which type of JSON it is:
+                # 1) a JSON associated with one single image and following the format:
+                #       {"location": "img.jpg", stage": "train", "annotated_regions": [...]}
+                # 2) a JSON following Studio format:
+                #       {"tags": [...], "images": [{"location": "img.jpg", stage": "train", "annotated_regions": [...]}, {...}]}
 
-                for i, json_object in enumerate(json_objects):
-                    image_path = os.path.join(os.path.dirname(file), json_object['location'])
+                # Check that the JSON is a dict
+                if not isinstance(json_objects, dict):
+                    tqdm.write("JSON {} is not a dictionnary.".format(os.path.basename(file)))
+                    continue
+
+                # If it's a type-1 JSON, transform it into a type-2 JSON
+                if 'location' in json_objects:
+                    json_objects = {'images': [json_objects]}
+
+                for i, img_json in enumerate(json_objects['images']):
+                    img_loc = img_json['location']
+                    image_path = os.path.join(os.path.dirname(file), img_loc)
                     if not os.path.isfile(image_path):
-                        tqdm.write("Can't find an image named {}".format(json_object['location']))
+                        tqdm.write("Can't find an image named {}".format(img_loc))
                         continue
                     image_key = uuid.uuid4().hex
-                    json_object['location'] = image_key
-                    q.put(('v1-beta/datasets/{}/commits/{}/images/'.format(dataset_name, commit_pk), json.dumps(json_object), image_path))
+                    img_json['location'] = image_key
+                    q.put(('v1-beta/datasets/{}/commits/{}/images/'.format(dataset_name, commit_pk), json.dumps(img_json), image_path))
                     total_images += 1
 
         # Initialize progressbar
