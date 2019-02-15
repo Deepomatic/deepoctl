@@ -64,7 +64,7 @@ def run(args):
     argparser = argparser_init()
 
     # Display the help section if no arguments are supplied
-    if len(sys.argv)==1:
+    if len(args)==0:
         argparser.print_help(sys.stderr)
         sys.exit(1)
     # Otherwise parse the arguments and run the command
