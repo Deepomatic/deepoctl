@@ -29,18 +29,15 @@ def get_all_files_with_ext(path, supported_ext, recursive=True):
     """Scans path to find all supported extensions."""
     all_files = []
     if os.path.isfile(path):
-        if path.split('.')[-1].lower() in supported_ext:
+        if os.path.splitext(path)[1][1:].lower() in supported_ext:
             all_files.append(path)
     elif os.path.isdir(path):
-        if recursive:
-            for root, dirs, files in os.walk(path, topdown=False):
-                for name in files:
-                    if name.split('.')[-1].lower() in supported_ext:
-                        all_files.append(os.path.join(root, name))
-        else:
-            for file in os.listdir(path):
-                file_path = os.path.join(path, file)
-                if os.path.isfile(file_path) and file_path.split('.')[-1].lower() in supported_ext:
+        for file in os.listdir(path):
+            file_path = os.path.join(path, file)
+            if recursive:
+                all_files.extend(get_all_files_with_ext(file_path, supported_ext))
+            else:
+                if os.path.isfile(file_path) and os.path.splitext(file_path)[1][1:].lower() in supported_ext:
                     all_files.append(file_path)
     else:
         raise RuntimeError("The path {} is neither a supported file {} nor a directory".format(path, supported_ext))
