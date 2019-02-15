@@ -14,7 +14,7 @@ class ParserWithHelpOnError(argparse.ArgumentParser):
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
         self.print_help()
-        sys.exit(2)
+        sys.exit(1)
 
 
 def argparser_init():
@@ -64,7 +64,7 @@ def run(args):
     argparser = argparser_init()
 
     # Display the help section if no arguments are supplied
-    if len(args)==0:
+    if len(args) == 0:
         argparser.print_help(sys.stderr)
         sys.exit(1)
     # Otherwise parse the arguments and run the command

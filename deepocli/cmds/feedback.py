@@ -26,26 +26,26 @@ class Client(object):
 
 
 def get_all_files_with_ext(path, supported_ext, recursive=True):
-    """Scans path to find all supported images."""
-    images = []
+    """Scans path to find all supported extensions."""
+    all_files = []
     if os.path.isfile(path):
         if path.split('.')[-1].lower() in supported_ext:
-            images.append(path)
+            all_files.append(path)
     elif os.path.isdir(path):
         if recursive:
             for root, dirs, files in os.walk(path, topdown=False):
                 for name in files:
                     if name.split('.')[-1].lower() in supported_ext:
-                        images.append(os.path.join(root, name))
+                        all_files.append(os.path.join(root, name))
         else:
             for file in os.listdir(path):
                 file_path = os.path.join(path, file)
                 if os.path.isfile(file_path) and file_path.split('.')[-1].lower() in supported_ext:
-                    images.append(file_path)
+                    all_files.append(file_path)
     else:
         raise RuntimeError("The path {} is neither a supported file {} nor a directory".format(path, supported_ext))
 
-    return images
+    return all_files
 
 def get_all_files(paths, find_json=False, recursive=True):
     """Retrieves all files from paths, either images or json if specified."""
@@ -53,7 +53,7 @@ def get_all_files(paths, find_json=False, recursive=True):
     paths = [paths] if not isinstance(paths, list) else paths
 
     # Go through all paths and find corresponding files
-    file_ext = 'json' if find_json else SUPPORTED_IMG_FORMAT
+    file_ext = ['json'] if find_json else SUPPORTED_IMG_FORMAT
     files = []
     for path in paths:
         files += get_all_files_with_ext(path, file_ext, recursive)

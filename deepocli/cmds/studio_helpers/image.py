@@ -39,7 +39,7 @@ def worker(self):
                     rq = self._helper.post(url, data={"meta": data}, content_type='multipart/form', files={"file": fd})
                 self._task.retrieve(rq['task_id'])
             except RuntimeError as e:
-                tqdm.write('Annotation format for image named {} is incorrect'.format(file))
+                tqdm.write('Annotation format for image named {} is incorrect'.format(file), file=sys.stderr)
             pbar.update(1)
             q.task_done()
             lock.acquire()
@@ -79,8 +79,8 @@ class Image(object):
                     with open(file, 'r') as fd:
                         json_objects = json.load(fd)
                 except ValueError as err:
-                    tqdm.write(err)
-                    tqdm.write("Can't read file {}, skipping...".format(file))
+                    tqdm.write(err, file=sys.stderr)
+                    tqdm.write("Can't read file {}, skipping...".format(file), file=sys.stderr)
                     continue
 
                 # Check which type of JSON it is:
@@ -91,7 +91,7 @@ class Image(object):
 
                 # Check that the JSON is a dict
                 if not isinstance(json_objects, dict):
-                    tqdm.write("JSON {} is not a dictionnary.".format(os.path.basename(file)))
+                    tqdm.write("JSON {} is not a dictionnary.".format(os.path.basename(file)), file=sys.stderr)
                     continue
 
                 # If it's a type-1 JSON, transform it into a type-2 JSON
@@ -102,7 +102,7 @@ class Image(object):
                     img_loc = img_json['location']
                     image_path = os.path.join(os.path.dirname(file), img_loc)
                     if not os.path.isfile(image_path):
-                        tqdm.write("Can't find an image named {}".format(img_loc))
+                        tqdm.write("Can't find an image named {}".format(img_loc), file=sys.stderr)
                         continue
                     image_key = uuid.uuid4().hex
                     img_json['location'] = image_key
