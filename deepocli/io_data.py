@@ -6,9 +6,9 @@ import logging
 import cv2
 import time
 import threading
-from progressbar import UnknownLength, ProgressBar
+from tqdm import tqdm
 
-try: 
+try:
     from Queue import Queue, LifoQueue, Empty
 except ImportError:
     from queue import Queue, LifoQueue, Empty
@@ -16,9 +16,8 @@ except ImportError:
 INPUT_QUEUE_MAX_SIZE = 50
 
 def print_log(log):
-    sys.stdout.write("\033[F") 
-    sys.stdout.write("\033[K")
-    print(log)
+    """Uses tqdm helper function to ensure progressbar stays at the bottom."""
+    tqdm.write(log)
 
 def get_input(descriptor, kwargs):
     if (descriptor is None):
@@ -64,56 +63,60 @@ def get_output(descriptor, kwargs):
 def input_loop(kwargs, worker_thread):
     inputs = get_input(kwargs.get('input', 0), kwargs)
 
-
+    # Initialize progress bar
     max_value = inputs.get_frame_count()
-    if max_value < 0:
-        max_value = UnknownLength
+    max_value = int(max_value) if max_value >= 0 else None  # ensure it's int for tqdm display
+    pbar = tqdm(total=max_value)
 
-    with ProgressBar(max_value=max_value, redirect_stdout=True) as bar:
-        # For realtime, queue should be LIFO
-        input_queue = LifoQueue() if inputs.is_infinite() else Queue()
-        output_queue = LifoQueue() if inputs.is_infinite() else Queue()
+    # For realtime, queue should be LIFO
+    input_queue = LifoQueue() if inputs.is_infinite() else Queue()
+    output_queue = LifoQueue() if inputs.is_infinite() else Queue()
 
-        worker = worker_thread(input_queue, output_queue, **kwargs)
-        output_thread = OutputThread(output_queue, on_progress=lambda i: bar.update(i), **kwargs)
+    worker = worker_thread(input_queue, output_queue, **kwargs)
+    worker.start()
+    output_thread = OutputThread(output_queue, on_progress=lambda i: pbar.update(1), **kwargs)
+    output_thread.start()
 
-        worker.start()
-        output_thread.start()
+    try:
+        for frame in inputs:
+            if inputs.is_infinite():
+                # Discard all previous inputs
+                while not input_queue.empty():
+                    try:
+                        input_queue.get(False)
+                        input_queue.task_done()
+                    except Empty:
+                        break
 
-        try:
-            for frame in inputs:
-                if inputs.is_infinite():
-                    # Discard all previous inputs
-                    while not input_queue.empty():
-                        try:
-                            input_queue.get(False)
-                            input_queue.task_done()
-                        except Empty:
-                            break
+            while input_queue.qsize() > INPUT_QUEUE_MAX_SIZE:
+                time.sleep(1)
 
-                while input_queue.qsize() > INPUT_QUEUE_MAX_SIZE:
-                    time.sleep(1)
+            input_queue.put(frame)
 
-                input_queue.put(frame)
+        # notify worker_thread that input stream is over
+        input_queue.put(None)
 
-            # notify worker_thread that input stream is over
-            input_queue.put(None)
+        worker.join()
+        output_thread.join()
 
-            worker.join()
-            output_thread.join()
+        # Close the tqdm progress bar
+        time.sleep(0.1)
+        pbar.n = max_value
+        pbar.refresh()
+        pbar.close()
 
-        except KeyboardInterrupt:
-            logging.info('Stopping input')
-            while not input_queue.empty():
-                try:
-                    input_queue.get(False)
-                    input_queue.task_done()
-                except Empty:
-                    break
-            input_queue.put(None)
+    except KeyboardInterrupt:
+        logging.info('Stopping input')
+        while not input_queue.empty():
+            try:
+                input_queue.get(False)
+                input_queue.task_done()
+            except Empty:
+                break
+        input_queue.put(None)
 
-            worker.join()
-            output_thread.join()
+        worker.join()
+        output_thread.join()
 
 class OutputThread(threading.Thread):
     def __init__(self, queue, on_progress=None, **kwargs):
@@ -304,7 +307,7 @@ class DirectoryInputData(InputData):
 
     def get_frame_count(self):
         return sum([_input.get_frame_count() for _input in self._inputs])
-    
+
     def get_fps(self):
         return 1
 
@@ -417,7 +420,7 @@ class VideoOutputData(OutputData):
             self._writer.release()
         self._writer = None
         return self
-    
+
     def __exit__(self, exception_type, exception_value, traceback):
         if self._writer is not None:
             self._writer.release()
@@ -429,7 +432,7 @@ class VideoOutputData(OutputData):
         else:
             if self._writer is None:
                 print_log('Writing %s' % self._descriptor)
-                self._writer = cv2.VideoWriter(self._descriptor, 
+                self._writer = cv2.VideoWriter(self._descriptor,
                     self._fourcc,
                     self._fps,
                     (frame.shape[1], frame.shape[0]))
