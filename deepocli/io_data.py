@@ -65,7 +65,7 @@ def input_loop(kwargs, worker_thread):
 
     # Initialize progress bar
     max_value = inputs.get_frame_count()
-    max_value = max_value if max_value >= 0 else None
+    max_value = int(max_value) if max_value >= 0 else None  # ensure it's int for tqdm display
     pbar = tqdm(total=max_value)
 
     # For realtime, queue should be LIFO
@@ -100,6 +100,9 @@ def input_loop(kwargs, worker_thread):
         output_thread.join()
 
         # Close the tqdm progress bar
+        time.sleep(0.1)
+        pbar.n = max_value
+        pbar.refresh()
         pbar.close()
 
     except KeyboardInterrupt:
