@@ -64,15 +64,6 @@ class Image(object):
             raise RuntimeError("Can't find the dataset {}".format(dataset_name))
         commit_pk = ret['commits'][0]['uuid']
 
-        # Initialize threads
-        threads = []
-        for i in range(THREAD_NUMBER):
-            t = threading.Thread(target=worker, args=(self, ))
-            t.daemon = True
-            t.start()
-            threads.append(t)
-        signal.signal(signal.SIGINT, handler)
-
         # Build the queue
         total_images = 0
         for file in files:
@@ -118,9 +109,19 @@ class Image(object):
                     q.put(('v1-beta/datasets/{}/commits/{}/images/'.format(dataset_name, commit_pk), json.dumps(img_json), image_path))
                     total_images += 1
 
-        # Initialize progressbar
+        # Initialize progressbar before starting workers
         print("Uploading images...")
         pbar = tqdm(total=total_images)
+
+        # Initialize threads
+        run = True  # reset the value to True in case the program is run multiple times
+        threads = []
+        for i in range(THREAD_NUMBER):
+            t = threading.Thread(target=worker, args=(self, ))
+            t.daemon = True
+            t.start()
+            threads.append(t)
+        signal.signal(signal.SIGINT, handler)
 
         # Process all files
         while not q.empty() and run:

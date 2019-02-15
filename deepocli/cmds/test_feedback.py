@@ -36,7 +36,6 @@ def test_2e2_upload_single_image():
     run(['feedback', '-d', 'deepocli-feedback-test-detection', '-o', 'travis-deepocli', single_img_pth])
 
 def test_2e2_upload_image_dir():
-    print(['feedback', '-d', 'deepocli-feedback-test-detection', '-o', 'travis-deepocli', img_dir_pth])
     run(['feedback', '-d', 'deepocli-feedback-test-detection', '-o', 'travis-deepocli', img_dir_pth])
 
 def test_2e2_upload_image_dir_recursive():
