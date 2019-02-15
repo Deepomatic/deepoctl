@@ -76,7 +76,7 @@ class Image(object):
             else:
                 # Verify json validity
                 try:
-                    with open(file, 'rb') as fd:
+                    with open(file, 'r') as fd:
                         json_objects = json.load(fd)
                 except ValueError as err:
                     tqdm.write(err)
