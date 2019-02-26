@@ -19,6 +19,17 @@ def print_log(log):
     """Uses tqdm helper function to ensure progressbar stays at the bottom."""
     tqdm.write(log)
 
+def save_json_to_file(json_data, json_path):
+    try:
+        with open('%s.json' % json_path, 'w') as file:
+            print_log('Writing %s.json' % json_path)
+            json.dump(json_data, file)
+    except:
+        logging.error("Could not save file {} in json format.".format(json_path))
+        raise
+
+    return
+
 def get_input(descriptor, kwargs):
     if (descriptor is None):
         raise NameError('No input specified. use -i flag')
@@ -351,6 +362,7 @@ class OutputData(object):
     def __init__(self, descriptor, **kwargs):
         self._descriptor = descriptor
         self._args = kwargs
+        self._json = kwargs.get('json', False)
 
     def __enter__(self):
         raise NotImplementedError()
@@ -394,6 +406,9 @@ class ImageOutputData(OutputData):
             else:
                 print_log('Writing %s' % path)
                 cv2.imwrite(path, frame)
+                if self._json:
+                    json_path = os.path.splitext(path)[0]
+                    save_json_to_file(prediction, json_path)
 
 
 class VideoOutputData(OutputData):
@@ -414,6 +429,7 @@ class VideoOutputData(OutputData):
         self._fourcc = fourcc
         self._fps = kwargs.get('output_fps', 25)
         self._writer = None
+        self._all_predictions = []
 
     def __enter__(self):
         if self._writer is not None:
@@ -422,6 +438,9 @@ class VideoOutputData(OutputData):
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
+        if self._json:
+            json_path = os.path.splitext(self._descriptor)[0]
+            save_json_to_file(self._all_predictions, json_path)
         if self._writer is not None:
             self._writer.release()
         self._writer = None
@@ -436,6 +455,9 @@ class VideoOutputData(OutputData):
                     self._fourcc,
                     self._fps,
                     (frame.shape[1], frame.shape[0]))
+            if self._json:
+                pred = {"outputs": [{"labels": {"discarded":[], "predicted": prediction}}], "location": name}
+                self._all_predictions.append(pred)
             self._writer.write(frame)
 
 class DirectoryOutputData(OutputData):
@@ -464,6 +486,8 @@ class DirectoryOutputData(OutputData):
         else:
             print_log('Writing %s.jpeg' % path)
             cv2.imwrite('%s.jpeg' % path, frame)
+            if self._json:
+                save_json_to_file(prediction, path)
 
 class DrawOutputData(OutputData):
 
