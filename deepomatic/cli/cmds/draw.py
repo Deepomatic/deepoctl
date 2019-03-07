@@ -10,7 +10,6 @@ class DrawThread(infer.InferenceThread):
     def processing(self, name, frame, prediction):
         return self.process(name, frame, prediction)
 
-
 def main(args, force=False):
     try:
         io_data.input_loop(args, DrawThread)

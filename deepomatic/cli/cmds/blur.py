@@ -1,7 +1,6 @@
 from deepomatic.cli.cmds import infer
 from deepomatic.cli import io_data
 
-
 class BlurThread(infer.InferenceThread):
     def __init__(self, input_queue, output_queue, **kwargs):
         super(BlurThread, self).__init__(input_queue, output_queue, **kwargs)
