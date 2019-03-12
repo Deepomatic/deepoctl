@@ -506,11 +506,11 @@ class VideoOutputData(OutputData):
 
     def __init__(self, descriptor, **kwargs):
         super(VideoOutputData, self).__init__(descriptor, **kwargs)
-        _, ext = os.path.splitext(descriptor)
-        if ext is 'mjpg':
-            fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-        else:
-            fourcc = cv2.VideoWriter_fourcc('X', '2', '6', '4')
+        ext = os.path.splitext(descriptor)[1]
+        if ext == '.avi':
+            fourcc = cv2.VideoWriter_fourcc('X', 'V', 'I', 'D')
+        elif ext == '.mp4':
+            fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         self._fourcc = fourcc
         self._fps = kwargs.get('output_fps', 25)
         self._writer = None
