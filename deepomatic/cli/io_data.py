@@ -293,14 +293,18 @@ class DirectoryInputData(InputData):
         self._files = []
         self._inputs = []
         self._i = 0
+        self._recursive = self._args['recursive']
 
         if self.is_valid(descriptor):
             _paths = [os.path.join(descriptor, name) for name in os.listdir(descriptor)]
-            _files = [
-                ImageInputData(path, **kwargs) if ImageInputData.is_valid(path) else
-                VideoInputData(path, **kwargs) if VideoInputData.is_valid(path) else
-                None for path in _paths if os.path.isfile(path)]
-            self._inputs = [_input for _input in _files if _input is not None]
+            self._inputs = []
+            for path in _paths:
+                if ImageInputData.is_valid(path):
+                    self._inputs.append(ImageInputData(path, **kwargs))
+                elif VideoInputData.is_valid(path):
+                    self._inputs.append(VideoInputData(path, **kwargs))
+                elif self._recursive and self.is_valid(path):
+                    self._inputs.append(DirectoryInputData(path, **kwargs))
 
     def _gen(self):
         for source in self._inputs:
@@ -722,22 +726,29 @@ class JsonOutputData(OutputData):
     def __init__(self, descriptor, **kwargs):
         super(JsonOutputData, self).__init__(descriptor, **kwargs)
         self._i = 0
+        # Check if the output is a wild card or not
+        try:
+            descriptor % self._i
+            self._all_predictions = None
+        except TypeError:
+            self._all_predictions = {'tags': [], 'images': []}
 
     def __enter__(self):
         self._i = 0
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        pass
+        if self._all_predictions:
+            json_path = os.path.splitext(self._descriptor)[0]
+            save_json_to_file(self._all_predictions, json_path)
 
     def __call__(self, name, frame, prediction):
-        path = self._descriptor
-        try:
-            path = path % self._i
-        except TypeError:
-            pass
-        finally:
-            self._i += 1
-            with open(path, 'w') as file:
-                print_log('Writing %s' % path)
-                json.dump(prediction, file)
+        self._i += 1
+        # If the json is not a wildcard we store prediction to write then to file a the end with the __exit__
+        if self._all_predictions:
+            self._all_predictions['images'] += prediction['images']
+            self._all_predictions['tags'] = list(set(self._all_predictions['tags'] + prediction['tags']))
+        # Otherwise we write them to file directly
+        else:
+            json_path = os.path.splitext(self._descriptor % self._i)[0]
+            save_json_to_file(prediction, json_path)
