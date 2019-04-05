@@ -54,6 +54,22 @@ def get_input(descriptor, kwargs):
     else:
         raise NameError('Unknown input')
 
+class ListContext:
+    def __init__(self, l):
+        self.l = l
+
+    def __enter__(self):
+        for x in self.l:
+            x.__enter__()
+        return self.l
+
+    def __exit__(self, type, value, traceback):
+        for x in self.l:
+            x.__exit__(type, value, traceback)
+
+def get_outputs(descriptors, kwargs):
+    return [get_output(descriptor, kwargs) for descriptor in descriptors]
+
 def get_output(descriptor, kwargs):
     if descriptor is not None:
         if DirectoryOutputData.is_valid(descriptor):
@@ -140,7 +156,7 @@ class OutputThread(threading.Thread):
 
     def run(self):
         i = 0
-        with get_output(self.args.get('output', None), self.args) as output:
+        with ListContext(get_outputs(self.args.get('outputs', None), self.args)) as outputs:
             try:
                 while True:
                     i += 1
@@ -149,7 +165,8 @@ class OutputThread(threading.Thread):
                         self.queue.task_done()
                         return
 
-                    output(*data)
+                    for output in outputs:
+                        output(*data)
                     if (self.on_progress is not None):
                         self.on_progress(i)
                     self.queue.task_done()
@@ -491,9 +508,6 @@ class ImageOutputData(OutputData):
             else:
                 print_log('Writing %s' % path)
                 cv2.imwrite(path, frame)
-                if self._json:
-                    json_path = os.path.splitext(path)[0]
-                    save_json_to_file(prediction, json_path)
 
 
 class VideoOutputData(OutputData):
@@ -523,9 +537,6 @@ class VideoOutputData(OutputData):
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        if self._json:
-            json_path = os.path.splitext(self._descriptor)[0]
-            save_json_to_file(self._all_predictions, json_path)
         if self._writer is not None:
             self._writer.release()
         self._writer = None
@@ -540,9 +551,6 @@ class VideoOutputData(OutputData):
                     self._fourcc,
                     self._fps,
                     (frame.shape[1], frame.shape[0]))
-            if self._json:
-                self._all_predictions['images'] += prediction['images']
-                self._all_predictions['tags'] = list(set(self._all_predictions['tags'] + prediction['tags']))
             self._writer.write(frame)
 
 class DirectoryOutputData(OutputData):
@@ -571,8 +579,6 @@ class DirectoryOutputData(OutputData):
         else:
             print_log('Writing %s.jpeg' % path)
             cv2.imwrite('%s.jpeg' % path, frame)
-            if self._json:
-                save_json_to_file(prediction, path)
 
 class DrawOutputData(OutputData):
 
