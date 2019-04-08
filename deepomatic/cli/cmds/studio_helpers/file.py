@@ -5,13 +5,16 @@ import json
 import uuid
 import time
 import signal
+import logging
 import threading
 from tqdm import tqdm
 from .task import Task
-if sys.version_info >= (3,0):
+from ...common import TqdmToLogger
+if sys.version_info >= (3, 0):
     import queue as Queue
 else:
     import Queue
+
 
 # Define thread parameters
 THREAD_NUMBER = 5
@@ -20,14 +23,16 @@ count = 0
 run = True
 lock = threading.Lock()
 
+
 def handler(signum, frame):
     global run, q, pbar
     run = False
     pbar.close()
-    print("Stopping upload...")
+    logging.info("Stopping upload..")
     while not q.empty():
         q.get()
         q.task_done()
+
 
 def worker(self):
     global count, run, q, pbar
@@ -39,7 +44,7 @@ def worker(self):
                     rq = self._helper.post(url, data={"meta": data}, content_type='multipart/form', files={"file": fd})
                 self._task.retrieve(rq['task_id'])
             except RuntimeError as e:
-                tqdm.write('Annotation format for file named {} is incorrect'.format(file), file=sys.stderr)
+                logging.error('Annotation format for file named {} is incorrect'.format(file), file=sys.stderr)
             pbar.update(1)
             q.task_done()
             lock.acquire()
@@ -48,13 +53,13 @@ def worker(self):
         except Queue.Empty:
             pass
 
+
 class File(object):
     def __init__(self, helper, task=None):
         self._helper = helper
         if not task:
             task = Task(helper)
         self._task = task
-
 
     def post_files(self, dataset_name, files, org_slug, is_json=False):
         global run, pbar
@@ -79,19 +84,19 @@ class File(object):
                     with open(file, 'r') as fd:
                         json_objects = json.load(fd)
                 except ValueError as err:
-                    tqdm.write(err, file=sys.stderr)
-                    tqdm.write("Can't read file {}, skipping...".format(file), file=sys.stderr)
+                    logging.error(err)
+                    logging.error("Can't read file {}, skipping..".format(file))
                     continue
 
                 # Check which type of JSON it is:
                 # 1) a JSON associated with one single file and following the format:
-                #       {"location": "img.jpg", stage": "train", "annotated_regions": [...]}
+                #       {"location": "img.jpg", stage": "train", "annotated_regions": [..]}
                 # 2) a JSON following Studio format:
-                #       {"tags": [...], "images": [{"location": "img.jpg", stage": "train", "annotated_regions": [...]}, {...}]}
+                #       {"tags": [..], "images": [{"location": "img.jpg", stage": "train", "annotated_regions": [..]}, {..}]}
 
                 # Check that the JSON is a dict
                 if not isinstance(json_objects, dict):
-                    tqdm.write("JSON {} is not a dictionnary.".format(os.path.basename(file)), file=sys.stderr)
+                    logging.error("JSON {} is not a dictionnary.".format(os.path.basename(file)))
                     continue
 
                 # If it's a type-1 JSON, transform it into a type-2 JSON
@@ -102,7 +107,7 @@ class File(object):
                     img_loc = img_json['location']
                     file_path = os.path.join(os.path.dirname(file), img_loc)
                     if not os.path.isfile(file_path):
-                        tqdm.write("Can't find an file named {}".format(img_loc), file=sys.stderr)
+                        logging.error("Can't find file named {}".format(img_loc))
                         continue
                     image_key = uuid.uuid4().hex
                     img_json['location'] = image_key
@@ -110,8 +115,10 @@ class File(object):
                     total_files += 1
 
         # Initialize progressbar before starting workers
-        print("Uploading images...")
-        pbar = tqdm(total=total_files)
+        logging.basicConfig(level=logging.INFO)
+        logger = logging.getLogger()
+        tqdmout = TqdmToLogger(logger, level=logging.INFO)
+        pbar = tqdm(total=total_files, file=tqdmout, desc='Uploading images', smoothing=0)
 
         # Initialize threads
         run = True  # reset the value to True in case the program is run multiple times
@@ -134,8 +141,8 @@ class File(object):
             t.join()
         pbar.close()
         if count == total_files:
-            print("All {} files have been uploaded.".format(count))
+            logging.info("All {} files have been uploaded.".format(count))
         else:
-            print("{} files out of {} have been uploaded.".format(count, total_files))
+            logging.info("{} files out of {} have been uploaded.".format(count, total_files))
 
         return True

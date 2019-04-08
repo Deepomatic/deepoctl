@@ -1,10 +1,8 @@
 import sys
 import argparse
-from deepomatic.cli.cmds.infer import main as infer
-from deepomatic.cli.cmds.draw import main as draw
-from deepomatic.cli.cmds.feedback import main as feedback
-from deepomatic.cli.cmds.blur import main as blur
-from deepomatic.cli.io_data import ImageInputData, VideoInputData, StreamInputData
+from .cmds.feedback import main as feedback
+from .input_data import ImageInputData, VideoInputData, StreamInputData, input_loop
+from .cmds.infer import BlurImagePostprocessing, DrawImagePostprocessing
 
 
 class ParserWithHelpOnError(argparse.ArgumentParser):
@@ -23,13 +21,13 @@ def argparser_init():
     subparsers.required = True
 
     infer_parser = subparsers.add_parser('infer', help="Computes prediction on a file or directory and outputs results as a JSON file.")
-    infer_parser.set_defaults(func=infer)
+    infer_parser.set_defaults(func=input_loop)
 
     draw_parser = subparsers.add_parser('draw', help="Generates new images and videos with predictions results drawn on them. Computes prediction if JSON has not yet been generated.")
-    draw_parser.set_defaults(func=draw)
+    draw_parser.set_defaults(func=lambda args: input_loop(args, DrawImagePostprocessing(**args)))
 
     blur_parser = subparsers.add_parser('blur', help="Generates new images and videos with predictions results blurred on them. Computes prediction if JSON has not yet been generated.")
-    blur_parser.set_defaults(func=blur)
+    blur_parser.set_defaults(func=lambda args: input_loop(args, BlurImagePostprocessing(**args)))
 
     studio_parser = subparsers.add_parser('studio', help='Deepomatic Studio related commands')
     studio_subparser = studio_parser.add_subparsers(dest='studio_command', help='')
@@ -46,9 +44,10 @@ def argparser_init():
         parser.add_argument('-u', '--amqp_url', help="AMQP url for on-premises deployments.")
         parser.add_argument('-k', '--routing_key', help="Recognition routing key for on-premises deployments.")
         parser.add_argument('-t', '--threshold', type=float, help="Threshold above which a prediction is considered valid.", default=None)
+        parser.add_argument('--fps', type=int, help="Video frame rate if applicable.")
+        parser.add_argument('-s', '--studio_format', action='store_true', help="Convert deepomatic run predictions into deepomatic studio format.")
 
     for parser in [draw_parser, blur_parser]:
-        parser.add_argument('--output_fps', help="In case of video output, video frame rate.", default=25)
         parser.add_argument('--fullscreen', help="Fullscreen if window output.", action="store_true")
 
     draw_parser.add_argument('--draw_scores', help="Overlays the prediction scores.", action="store_true")
@@ -64,10 +63,10 @@ def argparser_init():
 
     return argparser
 
+
 def run(args):
     # Initialize the argparser
     argparser = argparser_init()
-
     # Display the help section if no arguments are supplied
     if len(args) == 0:
         argparser.print_help(sys.stderr)
@@ -75,4 +74,4 @@ def run(args):
     # Otherwise parse the arguments and run the command
     else:
         args = argparser.parse_args(args)
-        args.func(vars(args))
+        return args.func(vars(args))
