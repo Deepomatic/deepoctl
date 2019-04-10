@@ -31,6 +31,7 @@ def argparser_init():
 
     studio_parser = subparsers.add_parser('studio', help='Deepomatic Studio related commands')
     studio_subparser = studio_parser.add_subparsers(dest='studio_command', help='')
+    studio_subparser.required = True
     feedback_parser = studio_subparser.add_parser('add_images', help='Uploads images from the local machine to Deepomatic Studio.')
     feedback_parser.set_defaults(func=feedback, recursive=False)
 
@@ -67,11 +68,5 @@ def argparser_init():
 def run(args):
     # Initialize the argparser
     argparser = argparser_init()
-    # Display the help section if no arguments are supplied
-    if len(args) == 0:
-        argparser.print_help(sys.stderr)
-        sys.exit(1)
-    # Otherwise parse the arguments and run the command
-    else:
-        args = argparser.parse_args(args)
-        return args.func(vars(args))
+    args = argparser.parse_args(args)
+    return args.func(vars(args))
