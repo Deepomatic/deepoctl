@@ -13,7 +13,8 @@ try:
 except ImportError:
     from queue import Empty
 
-DEFAULT_FPS = 25
+
+DEFAULT_OUTPUT_FPS = 25
 
 
 def save_json_to_file(json_data, json_path):
@@ -55,9 +56,21 @@ class OutputThread(ThreadBase):
         super(OutputThread, self).__init__(exit_event, 'OutputThread', input_queue)
         self.args = kwargs
         self.on_progress = on_progress
-        self.outputs = get_outputs(self.args.get('outputs', None), self.args)
         self.frames_to_check_first = {}
         self.frame_to_output = 0
+        
+        # Update output fps to default value if none was specified.
+        # #Logs information only if one of the outputs uses fps.
+        if not kwargs['output_fps']:
+            kwargs['output_fps'] = DEFAULT_OUTPUT_FPS
+            self.outputs = get_outputs(self.args.get('outputs', None), self.args)
+            for output in self.outputs:
+                if isinstance(output, VideoOutputData) or isinstance(output, DisplayOutputData):
+                    logging.info('No --output_fps value specified for output, using default value of {}.'.format(DEFAULT_OUTPUT_FPS))
+                    break
+        else:
+            self.outputs = get_outputs(self.args.get('outputs', None), self.args)
+
 
     def close(self):
         self.frames_to_check_first = {}
@@ -146,7 +159,7 @@ class VideoOutputData(OutputData):
         elif ext == '.mp4':
             fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         self._fourcc = fourcc
-        self._fps = kwargs['fps'] if kwargs['fps'] else DEFAULT_FPS
+        self._fps = kwargs['output_fps']
         self._writer = None
 
     def close(self):
@@ -181,7 +194,7 @@ class StdOutputData(OutputData):
 class DisplayOutputData(OutputData):
     def __init__(self, **kwargs):
         super(DisplayOutputData, self).__init__(None, **kwargs)
-        self._fps = kwargs.get('fps', DEFAULT_FPS)
+        self._fps = kwargs['output_fps']
         self._window_name = 'Deepomatic'
         self._fullscreen = kwargs.get('fullscreen', False)
 
