@@ -1,8 +1,14 @@
 import io
+import logging
+try:
+    from Queue import Empty, Full, Queue, LifoQueue
+except ImportError:
+    from queue import Empty, Full, Queue, LifoQueue
 
 
 class DeepoCLIException(Exception):
     pass
+
 
 class TqdmToLogger(io.StringIO):
     """Tqdm output stream to play nice with logger."""
@@ -20,3 +26,11 @@ class TqdmToLogger(io.StringIO):
 
     def flush(self):
         self.logger.log(self.level, self.buf)
+
+
+def clear_queue(queue):
+    with queue.mutex:
+        if isinstance(queue, LifoQueue):
+            queue.queue = []
+        else:
+            queue.queue.clear()

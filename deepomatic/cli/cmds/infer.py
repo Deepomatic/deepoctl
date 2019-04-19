@@ -1,13 +1,11 @@
 import cv2
+import logging
 from text_unidecode import unidecode
 
-try:
-    from Queue import Empty
-except ImportError:
-    from queue import Empty
-
+from ..workflow.workflow_abstraction import InferenceError, InferenceTimeout
 from .. import thread_base
 
+LOGGER = logging.getLogger(__name__)
 
 # Draw parameters
 SCORE_DECIMAL_PRECISION = 4             # Prediction score decimal number precision
@@ -55,7 +53,7 @@ class DrawImagePostprocessing(object):
                 label += str(round(pred['score'], SCORE_DECIMAL_PRECISION))
             # Make sure labels are ascii because cv2.FONT_HERSHEY_SIMPLEX doesn't support non-ascii
             label = unidecode(label)
-            
+
 
             # Get text draw parameters
             ret, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, 1)
@@ -138,43 +136,34 @@ class BlurImagePostprocessing(object):
                     output_image[ymin:ymax, xmin:xmax] = rectangle
 
 
-class SendInferenceThread(thread_base.ThreadBase):
-    def __init__(self, exit_event, input_queue, output_queue, workflow, **kwargs):
-        super(SendInferenceThread, self).__init__(exit_event, 'SendInferenceThread', input_queue)
-        self.output_queue = output_queue
-        self.workflow = workflow
-        self.args = kwargs
-
-    def loop_impl(self):
-        try:
-            frame = self.input_queue.get(timeout=thread_base.POP_TIMEOUT)
-        except Empty:
-            return
-
-        _, buf = cv2.imencode('.jpeg', frame.image)
+class PrepareInferenceThread(thread_base.Thread):
+    def process_msg(self, frame):
+        _, buf = cv2.imencode('.jpg', frame.image)
         buf_bytes = buf.tobytes()
-        frame.inference_async_result = self.workflow.infer(buf_bytes)
+        frame.buf_bytes = buf_bytes
+        self.current_messages.add_frame(frame)
+        return frame
 
-        self.input_queue.task_done()
-        self.output_queue.put(frame)
 
-
-class ResultInferenceThread(thread_base.ThreadBase):
-    def __init__(self, exit_event, input_queue, output_queue, workflow, **kwargs):
-        super(ResultInferenceThread, self).__init__(exit_event, 'ResultInferenceThread', input_queue)
-        self.output_queue = output_queue
+class SendInferenceGreenlet(thread_base.Greenlet):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow):
+        super(SendInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
-        self.args = kwargs
-        self.postprocessing = kwargs.get('postprocessing')
-        self.threshold = kwargs.get('threshold')
-        self.frames_to_check_first = []
+        self.push_client = workflow.new_client()
 
     def close(self):
-        self.frames_to_check_first = []
+        self.workflow.close_client(self.push_client)
 
-    def can_stop(self):
-        return super(ResultInferenceThread, self).can_stop() and \
-            len(self.frames_to_check_first) == 0
+    def process_msg(self, frame):
+        frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client)
+        return frame
+
+
+class ResultInferenceGreenlet(thread_base.Greenlet):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, **kwargs):
+        super(ResultInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
+        self.workflow = workflow
+        self.threshold = kwargs.get('threshold')
 
     def fill_predictions(self, predictions, new_predicted, new_discarded):
         for prediction in predictions:
@@ -183,42 +172,26 @@ class ResultInferenceThread(thread_base.ThreadBase):
             else:
                 new_discarded.append(prediction)
 
-    def loop_impl(self):
-        # we keep an internal cache that we re-check when it is big or that the input_queue is empty
-        if len(self.frames_to_check_first) > 10:
-            frame = self.frames_to_check_first.pop(0)
-        else:
-            try:
-                frame = self.input_queue.get(timeout=thread_base.POP_TIMEOUT)
-                self.input_queue.task_done()
-            except Empty:
-                if not self.frames_to_check_first:
-                    return
-                frame = self.frames_to_check_first.pop(0)
+    def process_msg(self, frame):
+        try:
+            predictions = frame.inference_async_result.get_predictions(timeout=60)
+            if self.threshold is not None:
+                # Keep only predictions higher than threshold
+                for output in predictions['outputs']:
+                    new_predicted = []
+                    new_discarded = []
+                    labels = output['labels']
+                    self.fill_predictions(labels['predicted'], new_predicted, new_discarded)
+                    self.fill_predictions(labels['discarded'], new_predicted, new_discarded)
+                    labels['predicted'] = new_predicted
+                    labels['discarded'] = new_discarded
 
-        predictions = frame.inference_async_result.get_predictions()
-
-        # If the prediction is not finished, then put the data back in the queue
-        if predictions is None:
-            self.frames_to_check_first.append(frame)
-            return
-
-        if self.threshold is not None:
-            # Keep only predictions higher than threshold
-            for output in predictions['outputs']:
-                new_predicted = []
-                new_discarded = []
-                labels = output['labels']
-                self.fill_predictions(labels['predicted'], new_predicted, new_discarded)
-                self.fill_predictions(labels['discarded'], new_predicted, new_discarded)
-                labels['predicted'] = new_predicted
-                labels['discarded'] = new_discarded
-
-        frame.predictions = predictions
-
-        if self.postprocessing is not None:
-            self.postprocessing(frame)
-        else:
-            frame.output_image = frame.image  # we output the original image
-
-        self.output_queue.put(frame)
+            frame.predictions = predictions
+            return frame
+        except InferenceError as e:
+            self.current_messages.forget_frame(frame)
+            LOGGER.error('Error getting predictions for frame {}: {}'.format(frame, str(e)))
+        except InferenceTimeout as e:
+            self.current_messages.forget_frame(frame)
+            LOGGER.error("Couldn't get predictions for the whole batch in enough time ({} seconds). Ignoring frames {}.".format(e.timeout, self.batch))
+        return None

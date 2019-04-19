@@ -2,28 +2,32 @@ import os
 import sys
 import logging
 import json
-import copy
 import cv2
 import imutils
-from .thread_base import ThreadBase, POP_TIMEOUT
+from .thread_base import Thread
+from .common import Empty
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 
-try:
-    from Queue import Empty
-except ImportError:
-    from queue import Empty
 
-
+LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
+
+
+try:
+    # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
+    write_bytes_to_stdout = sys.stdout.buffer.write
+except AttributeError:
+    write_bytes_to_stdout = sys.stdout.write
 
 
 def save_json_to_file(json_data, json_path):
     try:
-        with open('%s.json' % json_path, 'w') as file:
-            logging.info('Writing %s.json' % json_path)
-            json.dump(json_data, file)
+        with open('%s.json' % json_path, 'w') as f:
+            LOGGER.info('Writing %s.json ..' % json_path)
+            json.dump(json_data, f)
+            LOGGER.info('Writing %s.json done' % json_path)
     except Exception:
-        logging.error("Could not save file {} in json format.".format(json_path))
+        LOGGER.error("Could not save file {} in json format.".format(json_path))
         raise
 
     return
@@ -51,16 +55,18 @@ def get_outputs(descriptors, kwargs):
     return [get_output(descriptor, kwargs) for descriptor in descriptors]
 
 
-class OutputThread(ThreadBase):
-    def __init__(self, exit_event, input_queue, on_progress=None, **kwargs):
-        super(OutputThread, self).__init__(exit_event, 'OutputThread', input_queue)
+class OutputThread(Thread):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages,
+                 on_progress, postprocessing, **kwargs):
+        super(OutputThread, self).__init__(exit_event, input_queue,
+                                           output_queue, current_messages)
         self.args = kwargs
         self.on_progress = on_progress
+        self.postprocessing = postprocessing
         self.frames_to_check_first = {}
-        self.frame_to_output = 0
-        
+        self.frame_to_output = None
         # Update output fps to default value if none was specified.
-        # #Logs information only if one of the outputs uses fps.
+        # Logs information only if one of the outputs uses fps.
         if not kwargs['output_fps']:
             kwargs['output_fps'] = DEFAULT_OUTPUT_FPS
             self.outputs = get_outputs(self.args.get('outputs', None), self.args)
@@ -71,10 +77,9 @@ class OutputThread(ThreadBase):
         else:
             self.outputs = get_outputs(self.args.get('outputs', None), self.args)
 
-
     def close(self):
         self.frames_to_check_first = {}
-        self.frame_to_output = 0
+        self.frame_to_output = None
         for output in self.outputs:
             output.close()
 
@@ -82,25 +87,34 @@ class OutputThread(ThreadBase):
         return super(OutputThread, self).can_stop() and \
             len(self.frames_to_check_first) == 0
 
-    def loop_impl(self):
+    def pop_input(self):
         # looking into frames we popped earlier
+        if self.frame_to_output is None:
+            self.frame_to_output = self.current_messages.pop_oldest()
+            if self.frame_to_output is None:
+                raise Empty()
+
         frame = self.frames_to_check_first.pop(self.frame_to_output, None)
         if frame is None:
-            try:
-                frame = self.input_queue.get(timeout=POP_TIMEOUT)
-                self.input_queue.task_done()
-            except Empty:
-                return
+            frame = super(OutputThread, self).pop_input()
+        return frame
 
-            if self.frame_to_output != frame.frame_number:
-                self.frames_to_check_first[frame.frame_number] = frame
-                return
+    def process_msg(self, frame):
+        if self.frame_to_output != frame.frame_number:
+            self.frames_to_check_first[frame.frame_number] = frame
+            return
+
+        if self.postprocessing is not None:
+            self.postprocessing(frame)
+        else:
+            frame.output_image = frame.image  # we output the original image
 
         for output in self.outputs:
             output.output_frame(frame)
-        self.frame_to_output += 1
         if self.on_progress:
             self.on_progress()
+        self.task_done()
+        self.frame_to_output = None
 
 
 class OutputData(object):
@@ -129,18 +143,18 @@ class ImageOutputData(OutputData):
         self._i = 0
 
     def output_frame(self, frame):
+        self._i += 1
         path = self._descriptor
         try:
             path = path % self._i
         except TypeError:
             pass
         finally:
-            self._i += 1
             if frame.output_image is not None:
-                logging.info('Writing %s' % path)
+                LOGGER.info('Writing %s' % path)
                 cv2.imwrite(path, frame.output_image)
             else:
-                logging.warning('No frame to output.')
+                LOGGER.warning('No frame to output.')
 
 
 class VideoOutputData(OutputData):
@@ -169,10 +183,10 @@ class VideoOutputData(OutputData):
 
     def output_frame(self, frame):
         if frame.output_image is None:
-            logging.warning('No frame to output.')
+            LOGGER.warning('No frame to output.')
         else:
             if self._writer is None:
-                logging.info('Writing %s' % self._descriptor)
+                LOGGER.info('Writing %s' % self._descriptor)
                 self._writer = cv2.VideoWriter(self._descriptor, self._fourcc,
                                                self._fps, (frame.output_image.shape[1],
                                                            frame.output_image.shape[0]))
@@ -187,8 +201,7 @@ class StdOutputData(OutputData):
         if frame.output_image is None:
             print(json.dumps(frame.predictions))
         else:
-            # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
-            sys.stdout.buffer.write(frame.output_image[:, :, ::-1].tobytes())
+            write_bytes_to_stdout(frame.output_image[:, :, ::-1].tobytes())
 
 
 class DisplayOutputData(OutputData):
@@ -212,7 +225,7 @@ class DisplayOutputData(OutputData):
 
     def output_frame(self, frame):
         if frame.output_image is None:
-            logging.warning('No frame to output.')
+            LOGGER.warning('No frame to output.')
         else:
             cv2.imshow(self._window_name, frame.output_image)
             try:
@@ -275,8 +288,7 @@ class JsonOutputData(OutputData):
                     set(self._all_predictions['tags'] + predictions['tags'])
                 )
             else:
-                # we deepcopy to avoid surprises if another output modify the frame.predictions
-                self._all_predictions.append(copy.deepcopy(predictions))
+                self._all_predictions.append(predictions)
         # Otherwise we write them to file directly
         else:
             json_path = os.path.splitext(self._descriptor % self._i)[0]
