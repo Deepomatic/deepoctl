@@ -5,7 +5,7 @@ import uuid
 import logging
 from ...thread_base import Greenlet
 
-
+BATCH_SIZE = 15
 LOGGER = logging.getLogger(__name__)
 
 
@@ -18,17 +18,30 @@ class UploadImageGreenlet(Greenlet):
         self._task = task
 
     def process_msg(self, msg):
-        url, data, file = msg
-
+        url, batch = msg
+        files = {}
+        meta = {}
+        for file in batch:
+            try:
+                files.update({file['key']: open(file['path'], 'rb')})
+                if 'meta' in file:
+                    meta.update({file['key']: file['meta']})
+            except RuntimeError as e:
+                LOGGER.error('Something when wrong with {}: "{}". Skipping this file...'.format(file['path'], e))
         try:
-            with open(file, 'rb') as fd:
-                rq = self._helper.post(url, data={"meta": data}, content_type='multipart/form', files={"file": fd})
+            rq = self._helper.post(url, data={"objects": json.dumps(meta)}, content_type='multipart/form', files=files)
             self._task.retrieve(rq['task_id'])
         except RuntimeError as e:
-            LOGGER.error("URL {} with file {} failed: {}".format(url, file, e))
+            LOGGER.error("Failed to upload batch of images {}: {}".format(files, e))
+
+        for fd in files.values():
+            try:
+                fd.close()
+            except Exception:
+                pass
 
         if self.on_progress:
-            self.on_progress()
+            self.on_progress(len(batch))
         self.task_done()
 
 
@@ -37,18 +50,32 @@ class DatasetFiles(object):
         self._helper = helper
         self.output_queue = output_queue
 
+    def flush_batch(self, url, batch):
+        if len(batch) > 0:
+            self.output_queue.put((url, batch))
+        return []
+
+    def fill_flush_batch(self, url, batch, path, meta=None):
+        image_key = uuid.uuid4().hex
+        img = {"key": image_key, "path": path}
+        if meta is not None:
+            meta['location'] = image_key
+            img['meta'] = meta
+        batch.append(img)
+        if len(batch) >= BATCH_SIZE:
+            return self.flush_batch(url, batch)
+        return batch
+
     def fill_queue(self, files, dataset_name, commit_pk):
-        total_files = 0
+        total_images = 0
+        url = 'v1-beta/datasets/{}/commits/{}/images/batch/'.format(dataset_name, commit_pk)
+        batch = []
+
         for file in files:
             # If it's an file, add it to the queue
             if file.split('.')[-1].lower() != 'json':
-                tmp_name = uuid.uuid4().hex
-                self.output_queue.put((
-                    'v1-beta/datasets/{}/commits/{}/images/'.format(dataset_name, commit_pk),
-                    json.dumps({'location': tmp_name}),
-                    file
-                ))
-                total_files += 1
+                batch = self.fill_flush_batch(url, batch, file)
+                total_images += 1
             # If it's a json, deal with it accordingly
             else:
                 # Verify json validity
@@ -81,15 +108,10 @@ class DatasetFiles(object):
                     if not os.path.isfile(file_path):
                         LOGGER.error("Can't find file named {}".format(img_loc))
                         continue
-                    image_key = uuid.uuid4().hex
-                    img_json['location'] = image_key
-                    self.output_queue.put((
-                        'v1-beta/datasets/{}/commits/{}/images/'.format(dataset_name, commit_pk),
-                        json.dumps(img_json),
-                        file_path
-                    ))
-                    total_files += 1
-        return total_files
+                    batch = self.fill_flush_batch(url, batch, file_path, meta=img_json)
+                    total_images += 1
+        self.flush_batch(url, batch)
+        return total_images
 
     def post_files(self, dataset_name, files):
         # Retrieve endpoint
@@ -98,5 +120,4 @@ class DatasetFiles(object):
         except RuntimeError:
             raise RuntimeError("Can't find the dataset {}".format(dataset_name))
         commit_pk = ret['commits'][0]['uuid']
-        # Fill the queue
         return self.fill_queue(files, dataset_name, commit_pk)

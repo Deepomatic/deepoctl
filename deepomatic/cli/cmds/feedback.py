@@ -23,7 +23,7 @@ SUPPORTED_IMG_FORMAT = ['bmp', 'jpeg', 'jpg', 'jpe', 'png']
 
 
 class Client(object):
-    def __init__(self, token=None, verify_ssl=True, check_query_parameters=True, host=None, user_agent_suffix='', pool_maxsize=20):
+    def __init__(self, token=None, verify_ssl=True, check_query_parameters=True, host=None, user_agent_suffix='', pool_maxsize=GREENLET_NUMBER):
         if host is None:
             host = API_HOST
 
@@ -85,7 +85,8 @@ def main(args):
     queue = Queue()
 
     dataset_files = DatasetFiles(clt.http_helper, queue)
-    total_files = dataset_files.post_files(files=files, dataset_name=dataset_name)
+
+    total_files = dataset_files.post_files(dataset_name, files)
 
     exit_event = threading.Event()
 

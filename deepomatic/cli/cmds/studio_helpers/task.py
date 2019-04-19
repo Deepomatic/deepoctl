@@ -19,6 +19,6 @@ class Task(object):
                 ret = self._helper.get('manage/tasks/{}/'.format(task_id))
             else:
                 gevent.sleep(sleep_time)
-                sleep_time = min(sleep_time + 0.5, 5)
+                sleep_time = min(sleep_time + 0.3, 5)
                 ret = self._helper.get('manage/tasks/{}/'.format(task_id))
         return ret
