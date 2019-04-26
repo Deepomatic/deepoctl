@@ -5,7 +5,7 @@ import json
 import cv2
 import imutils
 from .thread_base import Thread
-from .common import Empty
+from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 
 
@@ -41,6 +41,8 @@ def get_output(descriptor, kwargs):
             return VideoOutputData(descriptor, **kwargs)
         elif JsonOutputData.is_valid(descriptor):
             return JsonOutputData(descriptor, **kwargs)
+        elif DirectoryOutputData.is_valid(descriptor):
+            return DirectoryOutputData(descriptor, **kwargs)
         elif descriptor == 'stdout':
             return StdOutputData(**kwargs)
         elif descriptor == 'window':
@@ -131,12 +133,10 @@ class OutputData(object):
 
 
 class ImageOutputData(OutputData):
-    supported_formats = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png']
-
     @classmethod
     def is_valid(cls, descriptor):
         _, ext = os.path.splitext(descriptor)
-        return ext in cls.supported_formats
+        return ext in SUPPORTED_IMAGE_OUTPUT_FORMAT
 
     def __init__(self, descriptor, **kwargs):
         super(ImageOutputData, self).__init__(descriptor, **kwargs)
@@ -150,20 +150,14 @@ class ImageOutputData(OutputData):
         except TypeError:
             pass
         finally:
-            if frame.output_image is not None:
-                LOGGER.info('Writing %s' % path)
-                cv2.imwrite(path, frame.output_image)
-            else:
-                LOGGER.warning('No frame to output.')
+            write_frame_to_disk(frame, path)
 
 
 class VideoOutputData(OutputData):
-    supported_formats = ['.avi', '.mp4']
-
     @classmethod
     def is_valid(cls, descriptor):
         _, ext = os.path.splitext(descriptor)
-        return ext in cls.supported_formats
+        return ext in SUPPORTED_VIDEO_OUTPUT_FORMAT
 
     def __init__(self, descriptor, **kwargs):
         super(VideoOutputData, self).__init__(descriptor, **kwargs)
@@ -244,12 +238,10 @@ class DisplayOutputData(OutputData):
 
 
 class JsonOutputData(OutputData):
-    supported_formats = ['.json']
-
     @classmethod
     def is_valid(cls, descriptor):
         _, ext = os.path.splitext(descriptor)
-        return ext in cls.supported_formats
+        return ext == '.json'
 
     def __init__(self, descriptor, **kwargs):
         super(JsonOutputData, self).__init__(descriptor, **kwargs)
@@ -293,3 +285,53 @@ class JsonOutputData(OutputData):
         else:
             json_path = os.path.splitext(self._descriptor % self._i)[0]
             save_json_to_file(predictions, json_path)
+
+
+class DirectoryOutputData(OutputData):
+    @classmethod
+    def is_valid(cls, descriptor):
+        return (os.path.exists(descriptor) and os.path.isdir(descriptor))
+
+    def __init__(self, descriptor, **kwargs):
+        super(DirectoryOutputData, self).__init__(descriptor, **kwargs)
+        self._input = self._args['input']
+
+    def output_frame(self, frame):
+        # If the input is a directory, then preserve directory structure, see below
+        # - Command: deepo -i dir1/ -R -o dir2/subdir2/ -r 123...
+        # - Input directory structure:
+        #     dir1
+        #     ├── subdir1
+        #     │   ├── img1.jpg
+        #     │   └── img2.jpg
+        #     └── video.mp4
+        # - Output directory structure:
+        #     dir2
+        #     └── subdir2
+        #         ├── subdir1
+        #         │   ├── img1_123.jpg
+        #         │   └── img2_123.jpg
+        #         ├── video_00001_123.jpg
+        #         ├── ...
+        #         └── video_xxxxx_123.jpg
+        # Otherwise implement a flat directory structure
+        if os.path.isdir(self._input):
+            rel_path = os.path.relpath(frame.filename, self._input)
+            rel_dir = os.path.dirname(rel_path)
+            root_dir = os.path.join(self._descriptor, rel_dir)
+        else:
+            root_dir = self._descriptor
+        if not os.path.isdir(root_dir):
+            os.makedirs(root_dir)
+
+        # If the input is an image, then use the same extension if supported
+        _, ext = os.path.splitext(frame.filename)
+        if ext in SUPPORTED_IMAGE_OUTPUT_FORMAT:
+            pass
+        # Otherwise defaults to jpg
+        else:
+            ext = '.jpg'
+
+        # Finally write the image to file with its name
+        path = os.path.join(root_dir, "{}{}".format(frame.name, ext))
+        write_frame_to_disk(frame, path)
