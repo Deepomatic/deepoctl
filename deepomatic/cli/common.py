@@ -16,10 +16,6 @@ SUPPORTED_IMAGE_OUTPUT_FORMAT = SUPPORTED_IMAGE_INPUT_FORMAT
 SUPPORTED_VIDEO_OUTPUT_FORMAT = ['.avi', '.mp4']
 
 
-class DeepoCLIException(Exception):
-    pass
-
-
 class TqdmToLogger(io.StringIO):
     """Tqdm output stream to play nice with logger."""
     logger = None
@@ -49,9 +45,9 @@ def clear_queue(queue):
 def write_frame_to_disk(frame, path):
     if frame.output_image is not None:
         if os.path.isfile(path):
-            LOGGER.warning('File {} already exists, skipping.'.format(path))
+            LOGGER.warning('File {} already exists. Skipping it.'.format(path))
         else:
-            LOGGER.info('Writing file {} to disk'.format(path))
+            LOGGER.debug('Writing file {} to disk'.format(path))
             cv2.imwrite(path, frame.output_image)
     else:
         LOGGER.warning('No frame to output.')

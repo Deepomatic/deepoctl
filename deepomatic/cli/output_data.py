@@ -4,6 +4,7 @@ import logging
 import json
 import cv2
 import imutils
+import traceback
 from .thread_base import Thread
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
@@ -23,11 +24,11 @@ except AttributeError:
 def save_json_to_file(json_data, json_path):
     try:
         with open('%s.json' % json_path, 'w') as f:
-            LOGGER.info('Writing %s.json ..' % json_path)
+            LOGGER.debug('Writing %s.json' % json_path)
             json.dump(json_data, f)
-            LOGGER.info('Writing %s.json done' % json_path)
+            LOGGER.debug('Writing %s.json done' % json_path)
     except Exception:
-        LOGGER.error("Could not save file {} in json format.".format(json_path))
+        LOGGER.error("Could not save file {} in json format: {}".format(json_path, traceback.format_exc()))
         raise
 
     return
@@ -74,7 +75,7 @@ class OutputThread(Thread):
             self.outputs = get_outputs(self.args.get('outputs', None), self.args)
             for output in self.outputs:
                 if isinstance(output, VideoOutputData) or isinstance(output, DisplayOutputData):
-                    logging.info('No --output_fps value specified for output, using default value of {}.'.format(DEFAULT_OUTPUT_FPS))
+                    LOGGER.info('No --output_fps value specified for output, using default value of {}.'.format(DEFAULT_OUTPUT_FPS))
                     break
         else:
             self.outputs = get_outputs(self.args.get('outputs', None), self.args)
@@ -180,7 +181,7 @@ class VideoOutputData(OutputData):
             LOGGER.warning('No frame to output.')
         else:
             if self._writer is None:
-                LOGGER.info('Writing %s' % self._descriptor)
+                LOGGER.debug('Writing %s' % self._descriptor)
                 self._writer = cv2.VideoWriter(self._descriptor, self._fourcc,
                                                self._fps, (frame.output_image.shape[1],
                                                            frame.output_image.shape[0]))

@@ -2,7 +2,7 @@ import cv2
 import time
 import logging
 from .workflow_abstraction import AbstractWorkflow, InferenceError, InferenceTimeout
-from ..common import DeepoCLIException
+from ..exceptions import DeepoRPCRecognitionError, DeepoRPCUnavailableError
 
 # First we test whether the deepomatic-rpc module is installed. An error here indicates we need to install it.
 try:
@@ -62,7 +62,7 @@ class RpcRecognition(AbstractWorkflow):
             try:
                 recognition_version_id = int(recognition_version_id)
             except ValueError:
-                raise DeepoCLIException("Cannot cast recognition ID into a number")
+                raise DeepoRPCRecognitionError("Cannot cast recognition ID into a number")
 
             self._command_mix = create_recognition_command_mix(recognition_version_id,
                                                                **recognition_cmd_kwargs)
@@ -70,7 +70,7 @@ class RpcRecognition(AbstractWorkflow):
             self._response_queue, self._consumer = self._consume_client.new_consuming_queue()
         else:
             self._client = None
-            raise DeepoCLIException('RPC not available')
+            raise DeepoRPCUnavailableError('RPC not available')
 
     def close_client(self, client):
         client.amqp_client.ensured_connection.close()
