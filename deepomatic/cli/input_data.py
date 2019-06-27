@@ -27,8 +27,8 @@ def get_input(descriptor, kwargs):
                 return ImageInputData(descriptor, **kwargs)
             elif VideoInputData.is_valid(descriptor):
                 return VideoInputData(descriptor, **kwargs)
-            elif JsonInputData.is_valid(descriptor):
-                return JsonInputData(descriptor, **kwargs)
+            elif StudioJsonInputData.is_valid(descriptor):
+                return StudioJsonInputData(descriptor, **kwargs)
             else:
                 raise NameError('Unsupported input file type')
         elif os.path.isdir(descriptor):
@@ -404,7 +404,7 @@ class DeviceInputData(VideoInputData):
         return True
 
 
-class JsonInputData(InputData):
+class StudioJsonInputData(InputData):
 
     @classmethod
     def is_valid(cls, descriptor):
@@ -425,22 +425,28 @@ class JsonInputData(InputData):
 
         # Check that the json follows the minimum Studio format
         studio_format_error = 'File {} is not a valid Studio json'.format(descriptor)
-        if 'images' not in json_data:
+
+        json_keys = list(json_data.keys())
+        if 'images' not in json_keys and 'videos' not in json_keys:
             raise NameError(studio_format_error)
-        elif not isinstance(json_data['images'], list):
-            raise NameError(studio_format_error)
-        else:
-            for img in json_data['images']:
-                if not isinstance(img, dict):
+        for ftype in ['images', 'videos']:
+            file_list = json_data.get(ftype, None)
+            if file_list is not None:
+                if not isinstance(file_list, list):
                     raise NameError(studio_format_error)
-                elif 'location' not in img:
-                    raise NameError(studio_format_error)
-                elif not ImageInputData.is_valid(img['location']):
-                    raise NameError('File {} is not valid'.format(img['location']))
+                for item in file_list:
+                    if not isinstance(item, dict):
+                        raise NameError(studio_format_error)
+                    elif 'location' not in item:
+                        raise NameError(studio_format_error)
+                    if ftype == 'images' and not ImageInputData.is_valid(item['location']):
+                        raise NameError('File {} is not valid'.format(item['location']))
+                    if ftype == 'videos' and not VideoInputData.is_valid(item['location']):
+                        raise NameError('File {} is not valid'.format(item['location']))
         return True
 
     def __init__(self, descriptor, **kwargs):
-        super(JsonInputData, self).__init__(descriptor, **kwargs)
+        super(StudioJsonInputData, self).__init__(descriptor, **kwargs)
         self._current = None
         self._files = []
         self._inputs = []
