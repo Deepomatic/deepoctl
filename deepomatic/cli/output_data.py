@@ -8,6 +8,7 @@ import traceback
 from .thread_base import Thread
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
+from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -28,8 +29,7 @@ def save_json_to_file(json_data, json_path):
             json.dump(json_data, f)
             LOGGER.debug('Writing %s.json done' % json_path)
     except Exception:
-        LOGGER.error("Could not save file {} in json format: {}".format(json_path, traceback.format_exc()))
-        raise
+        raise DeepoSaveJsonToFileError("Could not save file {} in json format: {}".format(json_path, traceback.format_exc()))
 
     return
 
@@ -49,7 +49,7 @@ def get_output(descriptor, kwargs):
         elif descriptor == 'window':
             return DisplayOutputData(**kwargs)
         else:
-            raise NameError("Unknown output '{}'".format(descriptor))
+            raise DeepoUnknownOutputError("Unknown output '{}'".format(descriptor))
     else:
         return DisplayOutputData(**kwargs)
 
@@ -225,7 +225,7 @@ class DisplayOutputData(OutputData):
             cv2.imshow(self._window_name, frame.output_image)
             try:
                 ms = 1000 // int(self._fps)
-            except:
+            except Exception:
                 ms = 1
             if cv2.waitKey(ms) & 0xFF == ord('q'):
                 cv2.destroyAllWindows()
@@ -266,12 +266,10 @@ class JsonOutputData(OutputData):
     def output_frame(self, frame):
         self._i += 1
         predictions = frame.predictions
+        predictions['location'] = frame.name
+        predictions['data'] = {'filename': frame.filename}
         if self._to_studio_format:
-            predictions = transform_json_from_vulcan_to_studio(predictions,
-                                                               frame.name,
-                                                               frame.filename)
-        else:
-            predictions['location'] = frame.filename
+            predictions = transform_json_from_vulcan_to_studio(predictions)
 
         if self._all_predictions is not None:
             # If the json is not a wildcard we store prediction to write then to file a the end in close()

@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 import threading
+from .json_schema import is_valid_studio_json, is_valid_vulcan_json
 from .exceptions import DeepoCLICredentialsError
 from .thread_base import Pool, Thread, MainLoop, CurrentMessages, blocking_lock, QUEUE_MAX_SIZE
 from .cmds.infer import SendInferenceGreenlet, ResultInferenceGreenlet, PrepareInferenceThread
@@ -13,6 +14,8 @@ from threading import Lock
 from .workflow import get_workflow
 from .output_data import OutputThread
 from .frame import Frame, CurrentFrames
+from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
+from .exceptions import DeepoWorkflowError, DeepoFPSError, DeepoVideoOpenError, DeepoInputError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -20,27 +23,39 @@ LOGGER = logging.getLogger(__name__)
 
 def get_input(descriptor, kwargs):
     if descriptor is None:
-        raise NameError('No input specified. use -i flag')
+        raise DeepoInputError('No input specified. use -i flag')
     elif os.path.exists(descriptor):
         if os.path.isfile(descriptor):
+            # Single image file
             if ImageInputData.is_valid(descriptor):
+                LOGGER.debug('Image input data detected for {}'.format(descriptor))
                 return ImageInputData(descriptor, **kwargs)
+            # Single video file
             elif VideoInputData.is_valid(descriptor):
+                LOGGER.debug('Video input data detected for {}'.format(descriptor))
                 return VideoInputData(descriptor, **kwargs)
+            # Studio json containing images location
             elif StudioJsonInputData.is_valid(descriptor):
+                LOGGER.debug('Images/videos studio json input data detected for {}'.format(descriptor))
                 return StudioJsonInputData(descriptor, **kwargs)
             else:
-                raise NameError('Unsupported input file type')
+                raise DeepoInputError('Unsupported input file type')
+        # Input directory containing images, videos, or json
         elif os.path.isdir(descriptor):
+            LOGGER.debug('Directory input data detected for {}'.format(descriptor))
             return DirectoryInputData(descriptor, **kwargs)
         else:
-            raise NameError('Unknown input path')
+            raise DeepoInputError('Unknown input path')
+    # Device indicated by digit number such as a webcam
     elif descriptor.isdigit():
+        LOGGER.debug('Device input data detected for {}'.format(descriptor))
         return DeviceInputData(descriptor, **kwargs)
+    # Video stream such as RTSP
     elif StreamInputData.is_valid(descriptor):
+        LOGGER.debug('Stream input data detected for {}'.format(descriptor))
         return StreamInputData(descriptor, **kwargs)
     else:
-        raise NameError('Unknown input')
+        raise DeepoInputError('Unknown input')
 
 
 class InputThread(Thread):
@@ -95,7 +110,8 @@ def input_loop(kwargs, postprocessing=None):
         LOGGER.info('Input fps of {} automatically detected, but no output fps specified. Using same value for both.'.format(kwargs['input_fps']))
 
     # Initialize progress bar
-    max_value = int(inputs.get_frame_count()) if inputs.get_frame_count() >= 0 else None
+    frame_count = inputs.get_frame_count()
+    max_value = int(frame_count) if frame_count >= 0 else None
     tqdmout = TqdmToLogger(LOGGER, level=LOGGER.getEffectiveLevel())
     pbar = tqdm(total=max_value, file=tqdmout, desc='Input processing', smoothing=0)
 
@@ -127,8 +143,12 @@ def input_loop(kwargs, postprocessing=None):
         Pool(1, OutputThread, thread_args=(exit_event, queues[3], None, current_frames, pbar.update, postprocessing), thread_kwargs=kwargs)
     ]
 
-    loop = MainLoop(pools, queues, pbar, lambda: workflow.close())
-    stop_asked = loop.run_forever()
+    loop = MainLoop(pools, queues, pbar, exit_event, lambda: workflow.close())
+    try:
+        stop_asked = loop.run_forever()
+    except Exception:
+        loop.cleanup()
+        raise
 
     # If the process encountered an error, the exit code is 1.
     # If the process is interrupted using SIGINT (ctrl + C) or SIGTERM, the queues are emptied and processed by the
@@ -141,7 +161,7 @@ def input_loop(kwargs, postprocessing=None):
 
 
 class InputData(object):
-    def __init__(self, descriptor,  **kwargs):
+    def __init__(self, descriptor, **kwargs):
         self._descriptor = descriptor
         self._args = kwargs
         self._name, _ = os.path.splitext(os.path.basename(str(descriptor)))
@@ -209,6 +229,7 @@ class VideoInputData(InputData):
         self._open_video()
         self._kwargs_fps = kwargs['input_fps']
         self._skip_frame = kwargs['skip_frame']
+        self._extract_fps = None
         self._fps = self.get_fps()
 
     def _open_video(self, raise_exc=True):
@@ -219,7 +240,7 @@ class VideoInputData(InputData):
         if not self._cap.isOpened():
             self._cap = None
             if raise_exc:
-                raise Exception("Could not open video {}".format(self._descriptor))
+                raise DeepoVideoOpenError("Could not open video {}".format(self._descriptor))
             return False
         return True
 
@@ -291,20 +312,20 @@ class VideoInputData(InputData):
         try:
             self._video_fps = self._cap.get(cv2.CAP_PROP_FPS)
         except Exception:
-            raise ValueError('Could not read fps for video {}, please specify it with --input_fps option.'.format(self._descriptor))
+            raise DeepoFPSError('Could not read fps for video {}, please specify it with --input_fps option.'.format(self._descriptor))
         if self._video_fps == 0:
-            raise ValueError('Null fps detected for video {}, please specify it with --input_fps option.'.format(self._descriptor))
+            raise DeepoFPSError('Null fps detected for video {}, please specify it with --input_fps option.'.format(self._descriptor))
 
         # Compute fps for frame extraction so that we don't analyze useless frame that will be discarded later
         if not self._kwargs_fps:
             self._extract_fps = self._video_fps
-            LOGGER.info('No --input_fps specified, using raw video fps of {}'.format(self._video_fps))
+            LOGGER.debug('No --input_fps specified, using raw video fps of {}'.format(self._video_fps))
         elif self._kwargs_fps < self._video_fps:
             self._extract_fps = self._kwargs_fps
-            LOGGER.info('Using user-specified --input_fps of {} instead of raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
+            LOGGER.debug('Using user-specified --input_fps of {} instead of raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
         else:
             self._extract_fps = self._video_fps
-            LOGGER.info('User-specified --input_fps of {} specified but using maximum raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
+            LOGGER.debug('User-specified --input_fps of {} specified but using maximum raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
 
         return self._extract_fps
 
@@ -315,7 +336,7 @@ class VideoInputData(InputData):
         skip_ratio = 1. / (1 + self._skip_frame)
         try:
             return int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT) * fps_ratio * skip_ratio)
-        except:
+        except Exception:
             LOGGER.warning('Cannot compute the total frame count')
             return 0
 
@@ -333,7 +354,6 @@ class DirectoryInputData(InputData):
         self._current = None
         self._files = []
         self._inputs = []
-        self._i = 0
         self._recursive = self._args['recursive']
 
         if self.is_valid(descriptor):
@@ -341,21 +361,25 @@ class DirectoryInputData(InputData):
             self._inputs = []
             for path in sorted(_paths):
                 if ImageInputData.is_valid(path):
+                    LOGGER.debug('Image input data detected for {}'.format(path))
                     self._inputs.append(ImageInputData(path, **kwargs))
                 elif VideoInputData.is_valid(path):
+                    LOGGER.debug('Video input data detected for {}'.format(path))
                     self._inputs.append(VideoInputData(path, **kwargs))
+                elif StudioJsonInputData.is_valid(path):
+                    LOGGER.debug('JSON input data detected for {}'.format(path))
+                    self._inputs.append(StudioJsonInputData(path, **kwargs))
                 elif self._recursive and self.is_valid(path):
+                    LOGGER.debug('Directory input data detected for {}'.format(path))
                     self._inputs.append(DirectoryInputData(path, **kwargs))
 
     def _gen(self):
         for source in self._inputs:
             for frame in source:
-                self._i += 1
                 yield frame
 
     def __iter__(self):
         self.gen = self._gen()
-        self._i = 0
         return self
 
     def __next__(self):
@@ -408,69 +432,47 @@ class StudioJsonInputData(InputData):
 
     @classmethod
     def is_valid(cls, descriptor):
-        # Check that the file exists
-        if not os.path.exists(descriptor):
-            return False
-
-        # Check that file is a json
-        if not os.path.splitext(descriptor)[1].lower() == '.json':
-            return False
-
-        # Check if json is a dictionnary
         try:
             with open(descriptor) as json_file:
-                json_data = json.load(json_file)
+                studio_json = json.load(json_file)
+            return is_valid_studio_json(studio_json)
         except Exception:
-            raise NameError('File {} is not a valid json'.format(descriptor))
-
-        # Check that the json follows the minimum Studio format
-        studio_format_error = 'File {} is not a valid Studio json'.format(descriptor)
-
-        json_keys = list(json_data.keys())
-        if 'images' not in json_keys and 'videos' not in json_keys:
-            raise NameError(studio_format_error)
-        for ftype in ['images', 'videos']:
-            file_list = json_data.get(ftype, None)
-            if file_list is not None:
-                if not isinstance(file_list, list):
-                    raise NameError(studio_format_error)
-                for item in file_list:
-                    if not isinstance(item, dict):
-                        raise NameError(studio_format_error)
-                    elif 'location' not in item:
-                        raise NameError(studio_format_error)
-                    if ftype == 'images' and not ImageInputData.is_valid(item['location']):
-                        raise NameError('File {} is not valid'.format(item['location']))
-                    if ftype == 'videos' and not VideoInputData.is_valid(item['location']):
-                        raise NameError('File {} is not valid'.format(item['location']))
-        return True
+            return False
 
     def __init__(self, descriptor, **kwargs):
         super(StudioJsonInputData, self).__init__(descriptor, **kwargs)
-        self._current = None
-        self._files = []
-        self._inputs = []
-        self._i = 0
 
+        # Check json validity then load it
         if self.is_valid(descriptor):
             with open(descriptor) as json_file:
-                json_data = json.load(json_file)
-                _paths = [img['location'] for img in json_data['images']]
-                _files = [
-                    ImageInputData(path, **kwargs) if ImageInputData.is_valid(path) else
-                    VideoInputData(path, **kwargs) if VideoInputData.is_valid(path) else
-                    None for path in _paths if os.path.isfile(path)]
-                self._inputs = [_input for _input in _files if _input is not None]
+                studio_json = json.load(json_file)
+
+        # Go through all locations and check input validity
+        self._inputs = []
+        for studio_img in studio_json['images']:
+            img_location = studio_img['location']
+            # If the file does not exist, ignore it
+            if not os.path.isfile(img_location):
+                LOGGER.warning("Could not find file {} referenced in JSON {}, skipping it".format(img_location, descriptor))
+            # If the file is an image, add it
+            elif ImageInputData.is_valid(img_location):
+                LOGGER.debug("Found image file {} referenced in JSON {}".format(img_location, descriptor))
+                self._inputs.append(ImageInputData(img_location, **kwargs))
+            # If the file is a video, add it
+            elif VideoInputData.is_valid(img_location):
+                LOGGER.debug("Found video file {} referenced in JSON {}".format(img_location, descriptor))
+                self._inputs.append(VideoInputData(img_location, **kwargs))
+            # If the video is neither image or video, ignore it
+            else:
+                LOGGER.warning("File {} referenced in JSON {} is neither a proper image or video, skipping it".format(img_location, descriptor))
 
     def _gen(self):
         for source in self._inputs:
             for frame in source:
-                self._i += 1
                 yield frame
 
     def __iter__(self):
         self.gen = self._gen()
-        self._i = 0
         return self
 
     def __next__(self):
