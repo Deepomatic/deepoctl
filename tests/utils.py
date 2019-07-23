@@ -8,14 +8,16 @@ from contextlib import contextmanager
 from deepomatic.cli.cli_parser import run
 
 
-# Output to test: Image, Video, Stdout, Json
-STD_OUTPUT = 'stdout'
-WINDOW_OUTPUT = 'window'
-IMAGE_OUTPUT = 'image_output%04d.jpg'
-VIDEO_OUTPUT = 'video_output.mp4'
-JSON_OUTPUT = 'test_output%04d.json'
-DIR_OUTPUT = 'output_dir'
-OUTPUTS = [STD_OUTPUT, IMAGE_OUTPUT, VIDEO_OUTPUT, JSON_OUTPUT, DIR_OUTPUT]
+# Define outputs
+OUTPUTS = {
+    'STD': 'stdout',
+    'WINDOW': 'window',
+    'IMAGE': 'image_output%04d.jpg',
+    'VIDEO': 'video_output.mp4',
+    'JSON': 'test_output%04d.json',
+    'DIR': 'output_dir'
+}
+OUTPUTS['ALL'] = [output for output in list(OUTPUTS.values()) if output != 'window']
 
 
 def download(tmpdir, url, filepath):
@@ -87,6 +89,31 @@ def check_directory(directory,
                     )
 
 
+def load_json_from_file(json_pth):
+    """Load data from a json"""
+    with open(json_pth, 'r') as json_file:
+        json_data = json.load(json_file)
+    return json_data
+
+
+def save_json_to_file(json_data, json_pth):
+    """Save data to a json"""
+    with open(json_pth, 'w') as json_file:
+        json.dump(json_data, json_file)
+
+
+def patch_json_for_tests(image_path, studio_json, vulcan_json):
+    """Update the image path in test files"""
+    # Patch studio JSON
+    json_data = load_json_from_file(studio_json)
+    json_data['images'][0]['location'] = image_path
+    save_json_to_file(json_data, studio_json)
+
+    # Patch vulcan JSON
+    json_data = load_json_from_file(vulcan_json)
+    json_data[0]['location'] = image_path
+    save_json_to_file(json_data, vulcan_json)
+
 
 def init_files_setup():
     """
@@ -109,18 +136,24 @@ def init_files_setup():
     img1_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/images/test.jpg', 'img_dir/img1.jpg')
     img2_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/images/test.jpg', 'img_dir/img2.jpg')
     img3_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/images/test.jpg', 'img_dir/subdir/img3.jpg')
-    json_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/json/studio.json', 'studio.json')
+    vulcan_json_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/json/vulcan.json', 'vulcan.json')
+    studio_json_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/json/studio.json', 'studio.json')
     offline_pred_pth = download(tmpdir, 'https://s3-eu-west-1.amazonaws.com/deepo-tests/vulcain/json/offline_pred.json', 'offline_pred.json')
     img_dir_pth = os.path.dirname(img1_pth)
 
     # Update json for path to match
-    with open(json_pth, 'r') as json_file:
-        json_data = json.load(json_file)
-    json_data['images'][0]['location'] = single_img_pth
-    with open(json_pth, 'w') as json_file:
-        json.dump(json_data, json_file)
+    patch_json_for_tests(single_img_pth, studio_json_pth, vulcan_json_pth)
 
-    return single_img_pth, video_pth, img_dir_pth, json_pth, offline_pred_pth
+    # Build input dictionnary for easier handling
+    INPUTS = {
+        'IMAGE': single_img_pth,
+        'VIDEO': video_pth,
+        'DIRECTORY': img_dir_pth,
+        'STUDIO_JSON': studio_json_pth,
+        'OFFLINE_PRED': offline_pred_pth,
+        'VULCAN_JSON': vulcan_json_pth,
+    }
+    return INPUTS
 
 
 def run_cmd(cmds, inp, outputs, *args, **kwargs):
@@ -128,18 +161,14 @@ def run_cmd(cmds, inp, outputs, *args, **kwargs):
     absolute_outputs = []
     with create_tmp_dir() as tmpdir:
         for output in outputs:
-            if output in {STD_OUTPUT, WINDOW_OUTPUT}:
+            if output in {OUTPUTS['STD'], OUTPUTS['WINDOW']}:
                 absolute_outputs.append(output)
-            elif output == DIR_OUTPUT:
+            elif output == OUTPUTS['DIR']:
                 check_subdir = True
-                output_dir = os.path.join(tmpdir, DIR_OUTPUT)
+                output_dir = os.path.join(tmpdir, OUTPUTS['DIR'])
                 os.makedirs(output_dir)
                 absolute_outputs.append(output_dir)
             else:
                 absolute_outputs.append(os.path.join(tmpdir, output))
         run(cmds + ['-i', inp, '-o'] + absolute_outputs + ['-r', 'fashion-v4'] + extra_opts)
         check_directory(tmpdir, *args, **kwargs)
-
-
-if __name__ == '__main__':
-    init_files_setup()

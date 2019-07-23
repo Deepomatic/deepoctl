@@ -37,12 +37,12 @@ class JsonRecognition(AbstractWorkflow):
             LOGGER.debug("Vulcan prediction JSON {} validated".format(pred_file))
         elif is_valid_studio_json(vulcan_json_with_pred):
             vulcan_json_with_pred = transform_json_from_studio_to_vulcan(vulcan_json_with_pred)
-            LOGGER.debug("Studio prediction JSON {} validated and transformer to Vulcan format".format(pred_file))
+            LOGGER.debug("Studio prediction JSON {} validated and transformed to Vulcan format".format(pred_file))
         else:
             raise DeepoPredictionJsonError("Prediction JSON file {} is neither a proper Studio or Vulcan JSON file".format(pred_file))
 
         # Store predictions for easy access
-        self._all_predictions = {vulcan_pred['location']: vulcan_pred for vulcan_pred in vulcan_json_with_pred}
+        self._all_predictions = {vulcan_pred['data']['framename']: vulcan_pred for vulcan_pred in vulcan_json_with_pred}
 
     def close(self):
         pass

@@ -56,7 +56,7 @@ STUDIO_JSON_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["location", "annotated_regions"],
+                "required": ["location"],
                 "properties": {
                     "location": {"type": "string"},
                     "data": {"type": "object"},

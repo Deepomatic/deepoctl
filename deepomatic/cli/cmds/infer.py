@@ -1,7 +1,6 @@
 import cv2
 import logging
 from text_unidecode import unidecode
-
 from ..workflow.workflow_abstraction import InferenceError, InferenceTimeout
 from .. import thread_base
 
@@ -53,7 +52,6 @@ class DrawImagePostprocessing(object):
                 label += str(round(pred['score'], SCORE_DECIMAL_PRECISION))
             # Make sure labels are ascii because cv2.FONT_HERSHEY_SIMPLEX doesn't support non-ascii
             label = unidecode(label)
-
 
             # Get text draw parameters
             ret, baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, 1)
@@ -155,8 +153,12 @@ class SendInferenceGreenlet(thread_base.Greenlet):
         self.workflow.close_client(self.push_client)
 
     def process_msg(self, frame):
-        frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
-        return frame
+        try:
+            frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
+            return frame
+        except InferenceError as e:
+            LOGGER.error('Error getting predictions for frame {}: {}'.format(frame, e))
+            return None
 
 
 class ResultInferenceGreenlet(thread_base.Greenlet):
