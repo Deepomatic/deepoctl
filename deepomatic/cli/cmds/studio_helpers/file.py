@@ -15,12 +15,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 class UploadImageGreenlet(Greenlet):
-    def __init__(self, exit_event, input_queue, helper, task, on_progress=None, **kwargs):
+    def __init__(self, exit_event, input_queue, helper, task, on_progress=None, set_metadata_path=False, **kwargs):
         super(UploadImageGreenlet, self).__init__(exit_event, input_queue)
         self.args = kwargs
         self.on_progress = on_progress
         self._helper = helper
         self._task = task
+        self._set_metadata_path = set_metadata_path
 
     def process_msg(self, msg):
         url, batch = msg
@@ -28,9 +29,17 @@ class UploadImageGreenlet(Greenlet):
         meta = {}
         for file in batch:
             try:
+                # Update file
                 files.update({file['key']: open(file['path'], 'rb')})
-                if 'meta' in file:
-                    meta.update({file['key']: file['meta']})
+
+                # Update corresponding metadata
+                file_meta = file.get('meta', {})
+                if self._set_metadata_path:
+                    if 'data' in file_meta:
+                        file_meta['data']['image_path'] = file['path']
+                    else:
+                        file_meta['data'] = {'image_path': file['path']}
+                meta[file['key']] = file_meta
             except RuntimeError as e:
                 LOGGER.error('Something when wrong with {}: {}. Skipping it.'.format(file['path'], e))
         try:
