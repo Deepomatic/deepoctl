@@ -106,3 +106,7 @@ def test_e2e_image_infer_json_threshold():
 
 def test_e2e_image_infer_json_studio():
     run_infer(INPUTS['IMAGE'], [OUTPUTS['NO_WILDCARD_JSON']], expect_nb_json=1, studio_format=True, extra_opts=['--studio_format'])
+
+
+def test_e2e_image_corrupted_infer_json():
+    run_infer(INPUTS['IMAGE_CORRUPTED'], [OUTPUTS['INT_WILDCARD_JSON']], expect_nb_json=0)

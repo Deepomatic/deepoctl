@@ -136,7 +136,11 @@ class BlurImagePostprocessing(object):
 
 class PrepareInferenceThread(thread_base.Thread):
     def process_msg(self, frame):
-        _, buf = cv2.imencode('.jpg', frame.image)
+        try:
+            _, buf = cv2.imencode('.jpg', frame.image)
+        except Exception as e:
+            LOGGER.error('Could not decode image for frame {}: {}'.format(frame, e))
+            return None
         buf_bytes = buf.tobytes()
         frame.buf_bytes = buf_bytes
         self.current_messages.add_frame(frame)
