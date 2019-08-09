@@ -5,11 +5,19 @@ import cv2
 import imutils
 import logging
 import traceback
+import signal
+import multiprocessing
+import pickle
 from .thread_base import Thread
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
+try:
+    from deepomatic.rpc.client import Client
+    RPC_PACKAGES_USABLE = True
+except ImportError:
+    RPC_PACKAGES_USABLE = False
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
@@ -44,6 +52,8 @@ def get_output(descriptor, kwargs):
             return JsonOutputData(descriptor, **kwargs)
         elif DirectoryOutputData.is_valid(descriptor):
             return DirectoryOutputData(descriptor, **kwargs)
+        elif descriptor == 'amqp':
+            return AMQPOutputData(descriptor, **kwargs)
         elif descriptor == 'stdout':
             return StdOutputData(**kwargs)
         elif descriptor == 'window':
@@ -153,6 +163,35 @@ class ImageOutputData(OutputData):
         finally:
             write_frame_to_disk(frame, path)
 
+class AMQPOutputData(OutputData):
+    def __init__(self, descriptor, **kwargs):
+        super(AMQPOutputData, self).__init__(descriptor, **kwargs)
+        if not RPC_PACKAGES_USABLE:
+            raise DeepoRPCUnavailableError('RPC not available')
+        self._amqp_url = kwargs['amqp_url']
+        self._client = None
+        self._queue = None
+
+    def close(self):
+        if self._client is not None:
+            self._client.remove_queue(self._queue)
+            self._client.amqp_client.ensured_connection.close()
+
+    def output_frame(self, frame):
+        if frame.output_image is None:
+            LOGGER.warning('No frame to output.')
+        else:
+            if self._client is None:
+                self._client = Client(self._amqp_url)
+                self._queue = self._client.new_queue()
+                LOGGER.info('Output queue: %s' % self._queue.routing_key)
+            # using pickle for now, TODO: protobuf ?
+            message = pickle.dumps({
+                'frame': frame.image,
+                'predictions': frame.predictions,
+                'filename': frame.filename
+            })
+            self._client.send_binary(message, self._queue.routing_key)
 
 class VideoOutputData(OutputData):
     @classmethod
