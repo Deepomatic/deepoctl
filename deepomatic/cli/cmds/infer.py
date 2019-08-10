@@ -169,30 +169,10 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
     def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, **kwargs):
         super(ResultInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
-        self.threshold = kwargs.get('threshold')
-
-    def fill_predictions(self, predictions, new_predicted, new_discarded):
-        for prediction in predictions:
-            if prediction['score'] >= self.threshold:
-                new_predicted.append(prediction)
-            else:
-                new_discarded.append(prediction)
 
     def process_msg(self, frame):
         try:
-            predictions = frame.inference_async_result.get_predictions(timeout=60)
-            if self.threshold is not None:
-                # Keep only predictions higher than threshold
-                for output in predictions['outputs']:
-                    new_predicted = []
-                    new_discarded = []
-                    labels = output['labels']
-                    self.fill_predictions(labels['predicted'], new_predicted, new_discarded)
-                    self.fill_predictions(labels['discarded'], new_predicted, new_discarded)
-                    labels['predicted'] = new_predicted
-                    labels['discarded'] = new_discarded
-
-            frame.predictions = predictions
+            frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
             return frame
         except InferenceError as e:
             self.current_messages.forget_frame(frame)

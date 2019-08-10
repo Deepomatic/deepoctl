@@ -13,13 +13,14 @@ LOGGER = logging.getLogger(__name__)
 
 class CloudRecognition(AbstractWorkflow):
     class InferResult(AbstractWorkflow.AbstractInferResult):
-        def __init__(self, task):
+        def __init__(self, task, threshold):
+            super(CloudRecognition.InferResult, self).__init__(threshold)
             self._task = task
 
         def get_predictions(self, timeout):
             try:
                 self._task.wait(timeout=timeout)
-                return self._task['data']
+                return self.filter_by_threshold(self._task['data'])
             except TaskError:
                 raise InferenceError(self._task.data())
             except TaskTimeout:
@@ -28,9 +29,9 @@ class CloudRecognition(AbstractWorkflow):
     def close(self):
         self._client.http_helper.session.close()
 
-    def __init__(self, recognition_version_id):
-        super(CloudRecognition, self).__init__('r{}'.format(recognition_version_id))
+    def __init__(self, recognition_version_id, threshold=None):
         self._id = recognition_version_id
+        self._threshold = threshold
 
         app_id = os.getenv('DEEPOMATIC_APP_ID', None)
         api_key = os.getenv('DEEPOMATIC_API_KEY', None)
@@ -53,4 +54,4 @@ class CloudRecognition(AbstractWorkflow):
             inputs=[deepomatic.api.inputs.ImageInput(encoded_image_bytes, encoding="binary")],
             show_discarded=True,
             return_task=True,
-            wait_task=False))
+            wait_task=False), threshold=self._threshold)

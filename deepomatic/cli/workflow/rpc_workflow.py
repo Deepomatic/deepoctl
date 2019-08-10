@@ -25,10 +25,9 @@ if RPC_PACKAGES_USABLE:
 
 
 class RpcRecognition(AbstractWorkflow):
-
     class InferResult(AbstractWorkflow.AbstractInferResult):
-
-        def __init__(self, correlation_id, consumer):
+        def __init__(self, correlation_id, consumer, threshold):
+            super(RpcRecognition.InferResult, self).__init__(threshold)
             self._correlation_id = correlation_id
             self._consumer = consumer
 
@@ -38,20 +37,20 @@ class RpcRecognition(AbstractWorkflow):
                 try:
                     outputs = response.to_parsed_result_buffer()
                     predictions = {'outputs': [{'labels': MessageToDict(output.labels, including_default_value_fields=True, preserving_proto_field_name=True)} for output in outputs]}
-                    return predictions
+                    return self.filter_by_threshold(predictions)
                 except ServerError as e:
                     raise InferenceError({'error': str(e), 'code': e.code})
             except Timeout:
                 raise InferenceTimeout(timeout)
 
-    def __init__(self, recognition_version_id, amqp_url, routing_key, recognition_cmd_kwargs=None):
-        super(RpcRecognition, self).__init__('recognition_{}'.format(recognition_version_id))
+    def __init__(self, recognition_version_id, amqp_url, routing_key, threshold=None, recognition_cmd_kwargs=None):
         self._id = recognition_version_id
 
         self._routing_key = routing_key
         self._consumer = None
         self.amqp_url = amqp_url
 
+        self._threshold = threshold
         recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
 
         if RPC_PACKAGES_USABLE:
@@ -92,4 +91,4 @@ class RpcRecognition(AbstractWorkflow):
         reply_to = self._response_queue.name
         serialized_buffer = create_v07_images_command([image_input], self._command_mix, forward_to=[reply_to])
         correlation_id = push_client.send_binary(serialized_buffer, self._command_queue.name, reply_to=reply_to)
-        return self.InferResult(correlation_id, self._consumer)
+        return self.InferResult(correlation_id, self._consumer, self._threshold)

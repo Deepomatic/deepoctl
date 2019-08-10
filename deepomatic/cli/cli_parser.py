@@ -3,11 +3,11 @@ import sys
 import logging
 import argparse
 from .cmds.feedback import main as feedback
-from .input_data import input_loop
-from .cmds.infer import BlurImagePostprocessing, DrawImagePostprocessing
+from .pipeline import Pipeline
 from .version import __version__, __title__
 from .common import SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT, SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_VIDEO_INPUT_FORMAT, SUPPORTED_PROTOCOLS_INPUT, SUPPORTED_FILE_INPUT_FORMAT
 
+LOGGER = logging.getLogger(__name__)
 
 class ParserWithHelpOnError(argparse.ArgumentParser):
     """
@@ -29,13 +29,8 @@ def argparser_init():
     subparsers.required = True
 
     infer_parser = subparsers.add_parser('infer', help="Computes prediction on a file or directory and outputs results as a JSON file.")
-    infer_parser.set_defaults(func=input_loop)
-
     draw_parser = subparsers.add_parser('draw', help="Generates new images and videos with predictions results drawn on them. Computes prediction if JSON has not yet been generated.")
-    draw_parser.set_defaults(func=lambda args: input_loop(args, DrawImagePostprocessing(**args)))
-
     blur_parser = subparsers.add_parser('blur', help="Generates new images and videos with predictions results blurred on them. Computes prediction if JSON has not yet been generated.")
-    blur_parser.set_defaults(func=lambda args: input_loop(args, BlurImagePostprocessing(**args)))
 
     studio_parser = subparsers.add_parser('studio', help='Deepomatic Studio related commands')
     studio_subparser = studio_parser.add_subparsers(dest='studio_command', help='')
@@ -48,6 +43,7 @@ def argparser_init():
         parser.add_argument('--verbose', dest='verbose', action='store_true', help='Increase output verbosity.')
 
     for parser in [infer_parser, draw_parser, blur_parser]:
+        parser.set_defaults(func=lambda args: Pipeline.from_kwargs(args).run())
         parser.add_argument('-i', '--input', required=True, help="Input path, either an image (*{}), a video (*{}), a directory, a stream (*{}), or a Studio json (*.json). If the given path is a directory, it will recursively run inference on all the supported files in this directory if the -R option is used.".format(', *'.join(SUPPORTED_IMAGE_INPUT_FORMAT), ', *'.join(SUPPORTED_VIDEO_INPUT_FORMAT), ', *'.join(SUPPORTED_PROTOCOLS_INPUT)))
         parser.add_argument('-o', '--outputs', required=True, nargs='+', help="Output path, either an image (*{}), a video (*{}), a json (*.json) or a directory.".format(', *'.join(SUPPORTED_IMAGE_OUTPUT_FORMAT), ', *'.join(SUPPORTED_VIDEO_OUTPUT_FORMAT)))
         parser.add_argument('-r', '--recognition_id', required=True, help="Neural network recognition version ID.")
