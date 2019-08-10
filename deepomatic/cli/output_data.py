@@ -198,6 +198,7 @@ class AMQPOutputData(OutputData):
             # using pickle for now, TODO: protobuf ?
             message = pickle.dumps({
                 'frame': frame.image,
+                'buffer': frame.buf_bytes,
                 'predictions': frame.predictions,
                 'filename': frame.filename
             })
