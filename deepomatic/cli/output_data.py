@@ -9,19 +9,19 @@ import signal
 import multiprocessing
 import pickle
 from .thread_base import Thread
+from .workflow import requires_deepomatic_rpc
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
-try:
-    from deepomatic.rpc.client import Client
-    RPC_PACKAGES_USABLE = True
-except ImportError:
-    RPC_PACKAGES_USABLE = False
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
 
+try:
+    from deepomatic.rpc.client import Client
+except:
+    pass
 
 try:
     # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
