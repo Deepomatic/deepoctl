@@ -11,7 +11,6 @@ from .cmds.infer import SendInferenceGreenlet, ResultInferenceGreenlet, PrepareI
 from tqdm import tqdm
 from .common import TqdmToLogger, Queue, LifoQueue, clear_queue, SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_VIDEO_INPUT_FORMAT, SUPPORTED_PROTOCOLS_INPUT
 from threading import Lock
-from .workflow import get_workflow
 from .output_data import OutputThread
 from .frame import Frame, CurrentFrames
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio

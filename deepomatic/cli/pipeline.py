@@ -9,17 +9,18 @@ from .common import TqdmToLogger, Queue
 from .frame import CurrentFrames
 from .input_data import InputThread, get_input, VideoInputData
 from .output_data import OutputThread, get_outputs
-from .workflow import get_workflow
+from .workflow import get_workflows
 from .cmds.infer import BlurImagePostprocessing, DrawImagePostprocessing
 
 LOGGER = logging.getLogger(__name__)
+
 
 class Pipeline(object):
     @classmethod
     def from_kwargs(cls, kwargs):
          # build pipeline
         input = get_input(kwargs)
-        stages = [get_workflow(kwargs)]
+        stages = get_workflows(kwargs)
         outputs = get_outputs(kwargs)
 
         postprocessing = (DrawImagePostprocessing(**kwargs) if kwargs['command'] == 'draw'
@@ -30,7 +31,9 @@ class Pipeline(object):
     def __init__(self, input, stages, outputs, postprocessing):
         # TODO: might need to rethink the whole pipeling for infinite streams
         # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
-        queues = [Queue(maxsize=QUEUE_MAX_SIZE) for _ in range(4)]
+        queues = [Queue(maxsize=QUEUE_MAX_SIZE) for _ in range(
+            len(stages) * 2 + 2
+        )]
 
         self.exit_event = threading.Event()
         self.stages = stages
@@ -44,22 +47,23 @@ class Pipeline(object):
 
 
         pools = []
-        
+
         # Input frames
         pools.append(Pool(1, InputThread, thread_args=(self.exit_event, None, queues[0], iter(input))))
-        
-        for stage in self.stages:
+
+        # Encode image into jpeg
+        pools.append(Pool(1, PrepareInferenceThread, thread_args=(self.exit_event, queues[0], queues[1], current_frames)))
+
+        for i, stage in enumerate(self.stages):
             pools.extend([
-                # Encode image into jpeg
-                Pool(1, PrepareInferenceThread, thread_args=(self.exit_event, queues[0], queues[1], current_frames)),
                 # Send inference
-                Pool(5, SendInferenceGreenlet, thread_args=(self.exit_event, queues[1], queues[2], current_frames, stage)),
+                Pool(5, SendInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+1], queues[2*i+2], current_frames, stage)),
                 # Gather inference predictions from the worker(s)
-                Pool(1, ResultInferenceGreenlet, thread_args=(self.exit_event, queues[2], queues[3], current_frames, stage))
+                Pool(1, ResultInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+2], queues[2*i+3], current_frames, stage))
             ])
-        
+
         # Output frames/predictions
-        pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[3], None, current_frames, pbar.update, outputs, postprocessing)))
+        pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], None, current_frames, pbar.update, outputs, postprocessing)))
 
         self.loop = MainLoop(pools, queues, pbar, self.exit_event, self.close)
 
