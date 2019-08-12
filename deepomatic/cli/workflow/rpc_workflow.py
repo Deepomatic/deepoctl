@@ -1,7 +1,6 @@
 import cv2
 import time
 import logging
-from google.protobuf.json_format import MessageToDict
 from .workflow_abstraction import AbstractWorkflow, InferenceError, InferenceTimeout
 from ..exceptions import DeepoRPCRecognitionError, DeepoRPCUnavailableError
 
