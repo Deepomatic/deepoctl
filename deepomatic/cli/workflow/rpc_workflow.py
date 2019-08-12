@@ -40,7 +40,7 @@ def requires_deepomatic_rpc(cls):
 
             try:
                 return old_new(cls, *args, **kwargs)
-            except:
+            except TypeError:
                 return old_new(cls)
 
         return __new__

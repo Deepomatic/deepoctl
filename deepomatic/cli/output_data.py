@@ -177,16 +177,16 @@ class AMQPOutputData(OutputData):
 
     @classmethod
     def is_valid(cls, descriptor):
-        return descriptor.startswith('amqp')
+        return descriptor.startswith('amqp#')
 
     def __init__(self, descriptor, **kwargs):
         super(AMQPOutputData, self).__init__(descriptor, **kwargs)
         self._amqp_url = kwargs['amqp_url']
         try:
             # descriptor is expected to have amqp.routing_key format
-            _, self._routing_key = descriptor.split('.', 1)
+            _, self._routing_key = descriptor.split('#', 1)
         except ValueError:
-            raise DeepoCLIException(f"{descriptor} format should be amqp.routing_key")
+            raise DeepoCLIException(f"{descriptor} format should be amqp#routing_key")
 
         self._client = None
         self._queue = None
@@ -194,7 +194,21 @@ class AMQPOutputData(OutputData):
     def init(self):
         self.close()
         self._client = Client(self._amqp_url)
-        self._queue = self._client.new_queue(self._routing_key)
+        self._queue = self._client.amqp_client.get_cached_queue(
+            queue_name=self._routing_key,
+            routing_key=self._routing_key,
+            exchange=self._client.amqp_exchange,
+            passive=False,
+            durable=False,
+            exclusive=False,
+            auto_delete=True,
+            no_declare=False,
+            queue_arguments={
+                "x-expires": 2 * 60 * 60 * 1000,  # in ms
+                "x-message-ttl": 2 * 60 * 1000,  # in ms
+            },
+            force_redeclare=True,
+            raise_if_not_cached=False)
 
     def close(self):
         if self._client is not None:
