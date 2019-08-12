@@ -12,7 +12,7 @@ from .thread_base import Thread
 from .workflow import requires_deepomatic_rpc
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
-from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
+from .exceptions import DeepoCLIException, DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
 
 LOGGER = logging.getLogger(__name__)
@@ -20,6 +20,8 @@ DEFAULT_OUTPUT_FPS = 25
 
 try:
     from deepomatic.rpc.client import Client
+    from deepomatic.rpc.buffers.protobuf.cli.Message_pb2 import Message
+    from google.protobuf.json_format import Parse
 except:
     pass
 
@@ -203,14 +205,25 @@ class AMQPOutputData(OutputData):
         if frame.output_image is None:
             LOGGER.warning('No frame to output.')
         else:
-            # using pickle for now, TODO: protobuf ?
-            message = pickle.dumps({
-                'frame': frame.image,
-                'buffer': frame.buf_bytes,
-                'predictions': frame.predictions,
-                'filename': frame.filename
-            })
-            self._client.send_binary(message, self._queue.routing_key)
+            message = Message()
+            Parse(json.dumps({
+                'result': {
+                    'v07_recognition': frame.predictions
+                },
+                'command': {
+                    'input_mix': {
+                        'v07_inputs': {
+                            'inputs': [{
+                                'image': {
+                                    'source': ''
+                                }
+                            }]
+                        }
+                    }
+                }
+            }), message)
+            message.command.input_mix.v07_inputs.inputs[0].image.source = frame.buf_bytes
+            self._client.send_binary(message.SerializeToString(), self._queue.routing_key)
 
 class VideoOutputData(OutputData):
     @classmethod
