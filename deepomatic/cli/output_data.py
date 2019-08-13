@@ -31,6 +31,12 @@ try:
 except AttributeError:
     write_bytes_to_stdout = sys.stdout.write
 
+try:
+    # python 2
+    import urlparse
+except ImportError:
+    # python3
+    import urllib.parse as urlparse
 
 def save_json_to_file(json_data, json_path):
     try:
@@ -177,16 +183,16 @@ class AMQPOutputData(OutputData):
 
     @classmethod
     def is_valid(cls, descriptor):
-        return descriptor.startswith('amqp#')
+        return descriptor.startswith('amqp://')
 
     def __init__(self, descriptor, **kwargs):
         super(AMQPOutputData, self).__init__(descriptor, **kwargs)
-        self._amqp_url = kwargs['amqp_url']
         try:
-            # descriptor is expected to have amqp.routing_key format
-            _, self._routing_key = descriptor.split('#', 1)
-        except ValueError:
-            raise DeepoCLIException("You should specify the routing key using the amqp#routing_key format")
+            parsed = urlparse.urlparse(descriptor)
+            self._amqp_url = parsed.scheme + "://" + parsed.netloc + parsed.path
+            self._routing_key = urlparse.parse_qs(parsed.query)['routing_key'][0]
+        except (ValueError, KeyError):
+            raise DeepoCLIException("Cannot parse the descriptor for amqp output. It should have the `amqp://HOST:PORT?routing_key=ROUTING_KEY` format")
 
         self._client = None
         self._queue = None
