@@ -194,21 +194,7 @@ class AMQPOutputData(OutputData):
     def init(self):
         self.close()
         self._client = Client(self._amqp_url)
-        self._queue = self._client.amqp_client.get_cached_queue(
-            queue_name=self._routing_key,
-            routing_key=self._routing_key,
-            exchange=self._client.amqp_exchange,
-            passive=False,
-            durable=False,
-            exclusive=False,
-            auto_delete=True,
-            no_declare=False,
-            queue_arguments={
-                "x-expires": 2 * 60 * 60 * 1000,  # in ms
-                "x-message-ttl": 2 * 60 * 1000,  # in ms
-            },
-            force_redeclare=True,
-            raise_if_not_cached=False)
+        self._queue = self._client.amqp_client.force_declare_tmp_queue(routing_key=self._routing_key, exchange=self._client.amqp_exchange)
 
     def close(self):
         if self._client is not None:
