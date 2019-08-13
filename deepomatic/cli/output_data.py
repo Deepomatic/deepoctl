@@ -17,6 +17,7 @@ DEFAULT_OUTPUT_FPS = 25
 
 try:
     from deepomatic.rpc.client import Client
+    from deepomatic.rpc import BINARY_IMAGE_PREFIX
     from deepomatic.rpc.buffers.protobuf.cli.Message_pb2 import Message
     from google.protobuf.json_format import ParseDict
 except:
@@ -218,14 +219,13 @@ class AMQPOutputData(OutputData):
                         'v07_inputs': {
                             'inputs': [{
                                 'image': {
-                                    'source': ''
+                                    'source': BINARY_IMAGE_PREFIX + frame.buf_bytes
                                 }
                             }]
                         }
                     }
                 }
             }, message)
-            message.command.input_mix.v07_inputs.inputs[0].image.source = frame.buf_bytes
             self._client.send_binary(message.SerializeToString(), self._queue.routing_key)
 
 class VideoOutputData(OutputData):
