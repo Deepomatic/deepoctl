@@ -5,9 +5,6 @@ import cv2
 import imutils
 import logging
 import traceback
-import signal
-import multiprocessing
-import pickle
 from .thread_base import Thread
 from .workflow import requires_deepomatic_rpc
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
