@@ -21,7 +21,7 @@ DEFAULT_OUTPUT_FPS = 25
 try:
     from deepomatic.rpc.client import Client
     from deepomatic.rpc.buffers.protobuf.cli.Message_pb2 import Message
-    from google.protobuf.json_format import Parse
+    from google.protobuf.json_format import ParseDict
 except:
     pass
 
@@ -212,7 +212,7 @@ class AMQPOutputData(OutputData):
             LOGGER.warning('No frame to output.')
         else:
             message = Message()
-            Parse(json.dumps({
+            ParseDict({
                 'result': {
                     'v07_recognition': frame.predictions
                 },
@@ -227,7 +227,7 @@ class AMQPOutputData(OutputData):
                         }
                     }
                 }
-            }), message)
+            }, message)
             message.command.input_mix.v07_inputs.inputs[0].image.source = frame.buf_bytes
             self._client.send_binary(message.SerializeToString(), self._queue.routing_key)
 
