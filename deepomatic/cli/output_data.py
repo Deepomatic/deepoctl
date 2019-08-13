@@ -186,7 +186,7 @@ class AMQPOutputData(OutputData):
             # descriptor is expected to have amqp.routing_key format
             _, self._routing_key = descriptor.split('#', 1)
         except ValueError:
-            raise DeepoCLIException(f"{descriptor} format should be amqp#routing_key")
+            raise DeepoCLIException("You should specify the routing key using the amqp#routing_key format")
 
         self._client = None
         self._queue = None
