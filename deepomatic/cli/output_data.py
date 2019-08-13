@@ -6,7 +6,7 @@ import imutils
 import logging
 import traceback
 from .thread_base import Thread
-from .workflow import requires_deepomatic_rpc
+from .workflow import requires_deepomatic_rpc, import_rpc_package
 from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoCLIException, DeepoUnknownOutputError, DeepoSaveJsonToFileError
@@ -15,13 +15,7 @@ from .exceptions import DeepoCLIException, DeepoUnknownOutputError, DeepoSaveJso
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
 
-try:
-    from deepomatic.rpc.client import Client
-    from deepomatic.rpc import BINARY_IMAGE_PREFIX
-    from deepomatic.rpc.buffers.protobuf.cli.Message_pb2 import Message
-    from google.protobuf.json_format import ParseDict
-except:
-    pass
+rpc, protobuf = import_rpc_package()
 
 try:
     # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
@@ -197,7 +191,7 @@ class AMQPOutputData(OutputData):
 
     def init(self):
         self.close()
-        self._client = Client(self._amqp_url)
+        self._client = rpc.client.Client(self._amqp_url)
         self._queue = self._client.amqp_client.force_declare_tmp_queue(routing_key=self._routing_key, exchange=self._client.amqp_exchange)
 
     def close(self):
@@ -209,8 +203,8 @@ class AMQPOutputData(OutputData):
         if frame.output_image is None:
             LOGGER.warning('No frame to output.')
         else:
-            message = Message()
-            ParseDict({
+            message = rpc.buffers.protobuf.cli.Message_pb2.Message()
+            protobuf.json_format.ParseDict({
                 'result': {
                     'v07_recognition': frame.predictions
                 },
@@ -219,7 +213,7 @@ class AMQPOutputData(OutputData):
                         'v07_inputs': {
                             'inputs': [{
                                 'image': {
-                                    'source': BINARY_IMAGE_PREFIX + frame.buf_bytes
+                                    'source': rpc.BINARY_IMAGE_PREFIX + frame.buf_bytes
                                 }
                             }]
                         }
