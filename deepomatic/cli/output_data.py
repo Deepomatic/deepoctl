@@ -209,17 +209,10 @@ class AMQPOutputData(OutputData):
                     'v07_recognition': frame.predictions
                 },
                 'command': {
-                    'input_mix': {
-                        'v07_inputs': {
-                            'inputs': [{
-                                'image': {
-                                    'source': rpc.BINARY_IMAGE_PREFIX + frame.buf_bytes
-                                }
-                            }]
-                        }
-                    }
                 }
             }, message)
+            image_input = rpc.v07_ImageInput(source=rpc.BINARY_IMAGE_PREFIX + frame.buf_bytes)
+            message.command.input_mix.CopyFrom(rpc.helpers.v07_proto.create_images_input_mix([image_input]))
             self._client.send_binary(message.SerializeToString(), self._queue.routing_key)
 
 class VideoOutputData(OutputData):
