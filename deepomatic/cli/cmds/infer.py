@@ -148,16 +148,30 @@ class PrepareInferenceThread(thread_base.Thread):
 
 
 class SendInferenceGreenlet(thread_base.Greenlet):
-    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, **kwargs):
         super(SendInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
         self.push_client = workflow.new_client()
+        self.realtime = kwargs.get('realtime')
 
     def close(self):
         self.workflow.close_client(self.push_client)
 
     def process_msg(self, frame):
         try:
+            if self.realtime and self.output_queue.full():
+                print('skip', frame.video_frame_index)
+                frame.predictions = predictions = {
+                    'outputs': [{
+                        'labels': {
+                            'predicted': [],
+                            'discarded': []
+                        }
+                    }]
+                }
+                self.realtime.put(frame)
+                return None
+            print('infer', frame.video_frame_index)
             frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
             return frame
         except InferenceError as e:
@@ -180,7 +194,17 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
 
     def process_msg(self, frame):
         try:
-            predictions = frame.inference_async_result.get_predictions(timeout=60)
+            if frame.inference_async_result is None:
+                predictions = {
+                    'outputs': [{
+                        'labels': {
+                            'predicted': [],
+                            'discarded': []
+                        }
+                    }]
+                }
+            else:
+                predictions = frame.inference_async_result.get_predictions(timeout=60)
             if self.threshold is not None:
                 # Keep only predictions higher than threshold
                 for output in predictions['outputs']:

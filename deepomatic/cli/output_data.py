@@ -192,7 +192,7 @@ class AMQPOutputData(OutputData):
     def init(self):
         self.close()
         self._client = rpc.client.Client(self._amqp_url)
-        self._queue = self._client.amqp_client.force_declare_tmp_queue(routing_key=self._routing_key, exchange=self._client.amqp_exchange)
+        self._queue = self._client.amqp_client.force_declare_tmp_queue(routing_key=self._routing_key, exchange=self._client.amqp_exchange, message_expiration=1000)
 
     def close(self):
         if self._client is not None:

@@ -58,6 +58,7 @@ def argparser_init():
         parser.add_argument('--skip_frame', type=int, help="Number of frame to skip between two frames from the input. It can be combined with input_fps", default=0)
         parser.add_argument('--output_fps', type=float, help="FPS usef for output video reconstruction.", default=None)
         parser.add_argument('-s', '--studio_format', action='store_true', help="Convert deepomatic run predictions into deepomatic studio format.")
+        parser.add_argument('--realtime', action='store_true', help="Skip frames.")
 
     for parser in [draw_parser, blur_parser]:
         parser.add_argument('-F', '--fullscreen', help="Fullscreen if window output.", action="store_true")
