@@ -45,18 +45,25 @@ class RpcRecognition(AbstractWorkflow):
 
     def __init__(self, recognition_version_id, amqp_url, routing_key, threshold=None, recognition_cmd_kwargs=None):
         self._id = recognition_version_id
-
+        self._recognition_version_id = recognition_version_id
         self._routing_key = routing_key
+        self._amqp_url = amqp_url
         self._consumer = None
         self.amqp_url = amqp_url
 
         self._threshold = threshold
-        recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
+        self.recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
+
+        self._client = None
+        # self.init()
+
+    def init(self):
+        recognition_version_id = self._recognition_version_id
 
         if RPC_PACKAGES_USABLE:
             # We declare the client that will be used for consuming in one thread only
             # RPC client is not thread safe
-            self._consume_client = Client(amqp_url)
+            self._consume_client = Client(self.amqp_url)
             self._recognition = None
             try:
                 recognition_version_id = int(recognition_version_id)
@@ -64,7 +71,7 @@ class RpcRecognition(AbstractWorkflow):
                 raise DeepoRPCRecognitionError("Cannot cast recognition ID into a number")
 
             self._command_mix = create_recognition_command_mix(recognition_version_id,
-                                                               **recognition_cmd_kwargs)
+                                                               **self.recognition_cmd_kwargs)
             self._command_queue = self._consume_client.new_queue(self._routing_key)
             self._response_queue, self._consumer = self._consume_client.new_consuming_queue()
         else:
@@ -78,7 +85,9 @@ class RpcRecognition(AbstractWorkflow):
         # Allow to create multiple clients for threads that will push
         # Since RPC client is not thread safe
         return Client(self.amqp_url)
-
+    
+    def new_consumer(self):
+        self.client 
     def close(self):
         if self._consumer is not None:
             self._consume_client.remove_consuming_queue(self._response_queue, self._consumer)

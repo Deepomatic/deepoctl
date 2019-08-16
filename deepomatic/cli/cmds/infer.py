@@ -148,16 +148,31 @@ class PrepareInferenceThread(thread_base.Thread):
 
 
 class SendInferenceGreenlet(thread_base.Greenlet):
-    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, skip):
         super(SendInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
-        self.push_client = workflow.new_client()
+        self.push_client = None
+        self.skip = skip
+
+    def init(self):
+        self.push_client = self.workflow.new_client()
 
     def close(self):
         self.workflow.close_client(self.push_client)
 
     def process_msg(self, frame):
         try:
+            if self.skip and self.output_queue.full():
+                frame.predictions = {
+                    'outputs': [{
+                        'labels': {
+                            'predicted': [],
+                            'discarded': []
+                        }
+                    }]
+                }
+                self.skip.put(frame)
+                return None
             frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
             return frame
         except InferenceError as e:
@@ -169,6 +184,9 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
     def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, **kwargs):
         super(ResultInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
+
+    def init(self):
+        self.workflow.init()
 
     def process_msg(self, frame):
         try:

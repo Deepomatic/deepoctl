@@ -28,10 +28,10 @@ class Pipeline(object):
                             else None)
         return cls(input, stages, outputs, postprocessing)
 
-    def __init__(self, input, stages, outputs, postprocessing):
+    def __init__(self, input, stages, outputs, postprocessing, queue_max_size=QUEUE_MAX_SIZE):
         # TODO: might need to rethink the whole pipeling for infinite streams
         # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
-        queues = [Queue(maxsize=QUEUE_MAX_SIZE) for _ in range(
+        queues = [Queue(maxsize=queue_max_size) for _ in range(
             len(stages) * 2 + 2
         )]
 
@@ -55,11 +55,14 @@ class Pipeline(object):
         pools.append(Pool(1, PrepareInferenceThread, thread_args=(self.exit_event, queues[0], queues[1], current_frames)))
 
         for i, stage in enumerate(self.stages):
+            # Send inference
+            skip = queues[2*i+3] if input.is_infinite() else None
+            send_inference = Pool(1, SendInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+1], queues[2*i+2], current_frames, stage, skip))
+            # Gather inference predictions from the worker(s)
+            result_inference =  Pool(1, ResultInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+2], queues[2*i+3], current_frames, stage))
             pools.extend([
-                # Send inference
-                Pool(5, SendInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+1], queues[2*i+2], current_frames, stage)),
-                # Gather inference predictions from the worker(s)
-                Pool(1, ResultInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+2], queues[2*i+3], current_frames, stage))
+                send_inference,
+                result_inference
             ])
 
         # Output frames/predictions
@@ -86,6 +89,9 @@ class Pipeline(object):
 
     def cleanup(self):
         self.loop.cleanup()
+
+    def stop(self):
+        self.loop.stop()
 
     def close(self):
         for stage in self.stages:
