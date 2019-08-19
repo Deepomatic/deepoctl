@@ -1,6 +1,7 @@
 import logging
 import sys
 import json
+from .workflow_abstraction import AbstractWorkflow
 from .cloud_workflow import CloudRecognition
 from .rpc_workflow import RpcRecognition
 from .json_workflow import JsonRecognition

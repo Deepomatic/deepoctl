@@ -55,7 +55,7 @@ class RpcRecognition(AbstractWorkflow):
         self.recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
 
         self._client = None
-        # self.init()
+        self._response_queue = None
 
     def init(self):
         recognition_version_id = self._recognition_version_id

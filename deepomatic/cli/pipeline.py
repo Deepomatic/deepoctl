@@ -3,40 +3,69 @@ import sys
 import logging
 import threading
 from .thread_base import Pool, Thread, MainLoop, CurrentMessages, blocking_lock, QUEUE_MAX_SIZE
-from .cmds.infer import SendInferenceGreenlet, ResultInferenceGreenlet, PrepareInferenceThread
+from .cmds.infer import PrepareInferenceThread, SendInferenceGreenlet, ResultInferenceGreenlet
 from tqdm import tqdm
 from .common import TqdmToLogger, Queue
 from .frame import CurrentFrames
-from .input_data import InputThread, get_input, VideoInputData
+from .input_data import InputThread, get_input, InputData
 from .output_data import OutputThread, get_outputs
-from .workflow import get_workflows
+from .workflow import get_workflows, AbstractWorkflow
 from .cmds.infer import BlurImagePostprocessing, DrawImagePostprocessing
 
 LOGGER = logging.getLogger(__name__)
 
+# patch the classes TODO: better way
+def AbstractWorkflow_to_stages(self, input_queue, output_queue, current_frames, exit_event, infinite=False):
+    queue = Queue(maxsize=output_queue.maxsize)
+    # Send inference
+    skip = output_queue if infinite else None
+    send_inference = Pool(1, SendInferenceGreenlet, thread_args=(exit_event, input_queue, queue, current_frames, self, skip))
+    # Gather inference predictions from the worker(s)
+    result_inference = Pool(1, ResultInferenceGreenlet, thread_args=(exit_event, queue, output_queue, current_frames, self))
+    return [
+        send_inference,
+        result_inference
+    ]
+
+AbstractWorkflow.stages = AbstractWorkflow_to_stages
+
+def InputData_to_stages(self, input_queue, output_queue, current_frames, exit_event):
+    queue = Queue(output_queue.maxsize)
+    # Input frames
+    input_thread = Pool(1, InputThread, thread_args=(exit_event, None, queue, iter(self)))
+
+    # Encode image into jpeg
+    prepare_thread = Pool(1, PrepareInferenceThread, thread_args=(exit_event, queue, output_queue, current_frames))
+
+    return [
+        input_thread,
+        prepare_thread
+    ]
+
+InputData.stages = InputData_to_stages
 
 class Pipeline(object):
     @classmethod
     def from_kwargs(cls, kwargs):
          # build pipeline
         input = get_input(kwargs)
-        stages = get_workflows(kwargs)
+        workflows = get_workflows(kwargs)
         outputs = get_outputs(kwargs)
 
         postprocessing = (DrawImagePostprocessing(**kwargs) if kwargs['command'] == 'draw'
                             else BlurImagePostprocessing(**kwargs) if kwargs['command'] == 'blur'
                             else None)
-        return cls(input, stages, outputs, postprocessing)
+        return cls(input, workflows, outputs, postprocessing)
 
-    def __init__(self, input, stages, outputs, postprocessing, queue_max_size=QUEUE_MAX_SIZE):
+    def __init__(self, input, workflows, outputs, postprocessing, queue_max_size=QUEUE_MAX_SIZE):
         # TODO: might need to rethink the whole pipeling for infinite streams
         # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
         queues = [Queue(maxsize=queue_max_size) for _ in range(
-            len(stages) * 2 + 2
+            len(workflows) + 1
         )]
 
         self.exit_event = threading.Event()
-        self.stages = stages
+        self.workflows = workflows
         current_frames = CurrentFrames()
 
         # Initialize progress bar
@@ -47,23 +76,9 @@ class Pipeline(object):
 
 
         pools = []
-
-        # Input frames
-        pools.append(Pool(1, InputThread, thread_args=(self.exit_event, None, queues[0], iter(input))))
-
-        # Encode image into jpeg
-        pools.append(Pool(1, PrepareInferenceThread, thread_args=(self.exit_event, queues[0], queues[1], current_frames)))
-
-        for i, stage in enumerate(self.stages):
-            # Send inference
-            skip = queues[2*i+3] if input.is_infinite() else None
-            send_inference = Pool(1, SendInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+1], queues[2*i+2], current_frames, stage, skip))
-            # Gather inference predictions from the worker(s)
-            result_inference =  Pool(1, ResultInferenceGreenlet, thread_args=(self.exit_event, queues[2*i+2], queues[2*i+3], current_frames, stage))
-            pools.extend([
-                send_inference,
-                result_inference
-            ])
+        pools.extend(input.stages(None, queues[0], current_frames, self.exit_event))
+        for i, workflow in enumerate(self.workflows):
+            pools.extend(workflow.stages(queues[i], queues[i+1], current_frames, self.exit_event, input.is_infinite()))
 
         # Output frames/predictions
         pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], None, current_frames, pbar.update, outputs, postprocessing)))
@@ -94,5 +109,5 @@ class Pipeline(object):
         self.loop.stop()
 
     def close(self):
-        for stage in self.stages:
-            stage.close()
+        for workflow in self.workflows:
+            workflow.close()
