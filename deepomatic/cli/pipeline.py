@@ -15,7 +15,9 @@ from .cmds.infer import BlurImagePostprocessing, DrawImagePostprocessing
 LOGGER = logging.getLogger(__name__)
 
 # patch the classes TODO: better way
-def AbstractWorkflow_to_stages(self, input_queue, output_queue, current_frames, exit_event, infinite=False):
+def AbstractWorkflow_to_stages(self, queues, i, current_frames, exit_event, infinite=False):
+    input_queue = queues[i]
+    output_queue = queues[i+1]
     queue = Queue(maxsize=output_queue.maxsize)
     # Send inference
     skip = output_queue if infinite else None
@@ -29,7 +31,8 @@ def AbstractWorkflow_to_stages(self, input_queue, output_queue, current_frames, 
 
 AbstractWorkflow.stages = AbstractWorkflow_to_stages
 
-def InputData_to_stages(self, input_queue, output_queue, current_frames, exit_event):
+def InputData_to_stages(self, queues, i, current_frames, exit_event):
+    output_queue = queues[i]
     queue = Queue(output_queue.maxsize)
     # Input frames
     input_thread = Pool(1, InputThread, thread_args=(exit_event, None, queue, iter(self)))
@@ -76,9 +79,9 @@ class Pipeline(object):
 
 
         pools = []
-        pools.extend(input.stages(None, queues[0], current_frames, self.exit_event))
+        pools.extend(input.stages(queues, 0, current_frames, self.exit_event))
         for i, workflow in enumerate(self.workflows):
-            pools.extend(workflow.stages(queues[i], queues[i+1], current_frames, self.exit_event, input.is_infinite()))
+            pools.extend(workflow.stages(queues, i, current_frames, self.exit_event, input.is_infinite()))
 
         # Output frames/predictions
         pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], None, current_frames, pbar.update, outputs, postprocessing)))
