@@ -43,10 +43,11 @@ class RpcRecognition(AbstractWorkflow):
             except Timeout:
                 raise InferenceTimeout(timeout)
 
-    def __init__(self, recognition_version_id, amqp_url, routing_key, threshold=None, recognition_cmd_kwargs=None):
+    def __init__(self, recognition_version_id, amqp_url, routing_key, threshold=None, inference_fps=float('inf'), recognition_cmd_kwargs=None):
         self._id = recognition_version_id
         self._recognition_version_id = recognition_version_id
         self._routing_key = routing_key
+        self._inference_fps = inference_fps
         self._amqp_url = amqp_url
         self._consumer = None
         self.amqp_url = amqp_url
@@ -85,9 +86,7 @@ class RpcRecognition(AbstractWorkflow):
         # Allow to create multiple clients for threads that will push
         # Since RPC client is not thread safe
         return Client(self.amqp_url)
-    
-    def new_consumer(self):
-        self.client 
+
     def close(self):
         if self._consumer is not None:
             self._consume_client.remove_consuming_queue(self._response_queue, self._consumer)
@@ -97,7 +96,8 @@ class RpcRecognition(AbstractWorkflow):
         # _useless_frame_name is used for the json workflow
         image_input = v07_ImageInput(source=BINARY_IMAGE_PREFIX + encoded_image_bytes)
         # forward_to parameter can be removed for images of worker nn with tag >= 0.7.8
-        reply_to = self._response_queue.name
-        serialized_buffer = create_v07_images_command([image_input], self._command_mix, forward_to=[reply_to])
-        correlation_id = push_client.send_binary(serialized_buffer, self._command_queue.name, reply_to=reply_to)
-        return self.InferResult(correlation_id, self._consumer, self._threshold)
+        if self._response_queue:
+            reply_to = self._response_queue.name
+            serialized_buffer = create_v07_images_command([image_input], self._command_mix, forward_to=[reply_to])
+            correlation_id = push_client.send_binary(serialized_buffer, self._command_queue.name, reply_to=reply_to)
+            return self.InferResult(correlation_id, self._consumer, self._threshold)

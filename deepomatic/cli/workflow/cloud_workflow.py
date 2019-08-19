@@ -29,9 +29,10 @@ class CloudRecognition(AbstractWorkflow):
     def close(self):
         self._client.http_helper.session.close()
 
-    def __init__(self, recognition_version_id, threshold=None):
+    def __init__(self, recognition_version_id, threshold=None, inference_fps=float('inf')):
         self._id = recognition_version_id
         self._threshold = threshold
+        self._inference_fps = inference_fps
 
         app_id = os.getenv('DEEPOMATIC_APP_ID', None)
         api_key = os.getenv('DEEPOMATIC_API_KEY', None)

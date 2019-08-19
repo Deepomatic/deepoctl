@@ -1,5 +1,6 @@
 import cv2
 import logging
+import time
 from text_unidecode import unidecode
 from ..workflow.workflow_abstraction import InferenceError, InferenceTimeout
 from .. import thread_base
@@ -148,11 +149,12 @@ class PrepareInferenceThread(thread_base.Thread):
 
 
 class SendInferenceGreenlet(thread_base.Greenlet):
-    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, skip):
+    def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, skip=None, inference_fps=float('inf')):
         super(SendInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
         self.push_client = None
         self.skip = skip
+        self._last_inference = 0
 
     def init(self):
         self.push_client = self.workflow.new_client()
@@ -160,9 +162,13 @@ class SendInferenceGreenlet(thread_base.Greenlet):
     def close(self):
         self.workflow.close_client(self.push_client)
 
+    def _should_skip(self):
+        too_soon = (time.time() - self._last_inference) < (1. / self.workflow._inference_fps)
+        return self.output_queue.full() or too_soon
+
     def process_msg(self, frame):
         try:
-            if self.skip and self.output_queue.full():
+            if self.skip and self._should_skip():
                 frame.predictions = {
                     'outputs': [{
                         'labels': {
@@ -173,6 +179,7 @@ class SendInferenceGreenlet(thread_base.Greenlet):
                 }
                 self.skip.put(frame)
                 return None
+            self._last_inference = time.time()
             frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
             return frame
         except InferenceError as e:
@@ -190,7 +197,8 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
 
     def process_msg(self, frame):
         try:
-            frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
+            if frame.inference_async_result:
+                frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
             return frame
         except InferenceError as e:
             self.current_messages.forget_frame(frame)
