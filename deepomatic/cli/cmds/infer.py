@@ -42,7 +42,11 @@ class DrawImagePostprocessing(object):
         height = output_image.shape[0]
         width = output_image.shape[1]
         tag_drawn = 0  # Used to store the number of tags already drawn
-        for pred in frame.predictions['outputs'][0]['labels']['predicted']:
+        try:
+            predictions = frame.predictions['outputs'][0]['labels']['predicted']
+        except KeyError, TypeError:
+            predictions = []
+        for pred in predictions:
             # Build legend
             label = u''
             if self._draw_labels:
@@ -111,7 +115,11 @@ class BlurImagePostprocessing(object):
         output_image = frame.output_image
         height = output_image.shape[0]
         width = output_image.shape[1]
-        for pred in frame.predictions['outputs'][0]['labels']['predicted']:
+        try:
+            predictions = frame.predictions['outputs'][0]['labels']['predicted']
+        except KeyError, TypeError:
+            predictions = []
+        for pred in predictions
             # Check that we have a bounding box
             roi = pred.get('roi')
             if roi is not None:
