@@ -119,7 +119,7 @@ class BlurImagePostprocessing(object):
             predictions = frame.predictions['outputs'][0]['labels']['predicted']
         except (KeyError, TypeError):
             predictions = []
-        for pred in predictions
+        for pred in predictions:
             # Check that we have a bounding box
             roi = pred.get('roi')
             if roi is not None:
