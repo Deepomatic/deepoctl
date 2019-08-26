@@ -108,8 +108,16 @@ class Pipeline(object):
     def cleanup(self):
         self.loop.cleanup()
 
-    def stop(self):
-        self.loop.stop()
+    def stop(self, force=False):
+        if force:
+            for pool in self.loop.pools:
+                pool.stop()
+
+            # clearing queues to make sure a thread
+            # is not blocked in a queue.put() because of maxsize
+            self.loop.clear_queues()
+        else:
+            self.loop.stop()
 
     def close(self):
         for workflow in self.workflows:
