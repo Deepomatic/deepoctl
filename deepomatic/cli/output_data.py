@@ -103,6 +103,10 @@ class OutputThread(Thread):
             frame = super(OutputThread, self).pop_input()
         return frame
 
+    def task_done(self):
+        super(OutputThread, self).task_done()
+        self.frame_to_output = None        
+    
     def process_msg(self, frame):
         if self.frame_to_output != frame.frame_number:
             self.frames_to_check_first[frame.frame_number] = frame
@@ -115,11 +119,13 @@ class OutputThread(Thread):
 
         for output in self.outputs:
             output.output_frame(frame)
+
         if self.on_progress:
             self.on_progress()
-        self.task_done()
-        self.frame_to_output = None
 
+        if self.output_queue is not None:
+            return frame
+        return None
 
 class OutputData(object):
     def __init__(self, descriptor, **kwargs):

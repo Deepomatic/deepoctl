@@ -50,21 +50,14 @@ class RpcRecognition(AbstractWorkflow):
         self._inference_fps = inference_fps
         self._amqp_url = amqp_url
         self._consumer = None
-        self.amqp_url = amqp_url
 
         self._threshold = threshold
-        self.recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
-
-        self._client = None
-        self._response_queue = None
-
-    def init(self):
-        recognition_version_id = self._recognition_version_id
+        recognition_cmd_kwargs = recognition_cmd_kwargs or {'show_discarded': True, 'max_predictions': 1000}
 
         if RPC_PACKAGES_USABLE:
             # We declare the client that will be used for consuming in one thread only
             # RPC client is not thread safe
-            self._consume_client = Client(self.amqp_url)
+            self._consume_client = Client(self._amqp_url)
             self._recognition = None
             try:
                 recognition_version_id = int(recognition_version_id)
@@ -72,7 +65,7 @@ class RpcRecognition(AbstractWorkflow):
                 raise DeepoRPCRecognitionError("Cannot cast recognition ID into a number")
 
             self._command_mix = create_recognition_command_mix(recognition_version_id,
-                                                               **self.recognition_cmd_kwargs)
+                                                               **recognition_cmd_kwargs)
             self._command_queue = self._consume_client.new_queue(self._routing_key)
             self._response_queue, self._consumer = self._consume_client.new_consuming_queue()
         else:
@@ -85,7 +78,7 @@ class RpcRecognition(AbstractWorkflow):
     def new_client(self):
         # Allow to create multiple clients for threads that will push
         # Since RPC client is not thread safe
-        return Client(self.amqp_url)
+        return Client(self._amqp_url)
 
     def close(self):
         if self._consumer is not None:
@@ -96,8 +89,8 @@ class RpcRecognition(AbstractWorkflow):
         # _useless_frame_name is used for the json workflow
         image_input = v07_ImageInput(source=BINARY_IMAGE_PREFIX + encoded_image_bytes)
         # forward_to parameter can be removed for images of worker nn with tag >= 0.7.8
-        if self._response_queue:
-            reply_to = self._response_queue.name
-            serialized_buffer = create_v07_images_command([image_input], self._command_mix, forward_to=[reply_to])
-            correlation_id = push_client.send_binary(serialized_buffer, self._command_queue.name, reply_to=reply_to)
-            return self.InferResult(correlation_id, self._consumer, self._threshold)
+
+        reply_to = self._response_queue.name
+        serialized_buffer = create_v07_images_command([image_input], self._command_mix, forward_to=[reply_to])
+        correlation_id = push_client.send_binary(serialized_buffer, self._command_queue.name, reply_to=reply_to)
+        return self.InferResult(correlation_id, self._consumer, self._threshold)

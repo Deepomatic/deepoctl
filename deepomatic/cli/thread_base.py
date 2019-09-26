@@ -9,7 +9,7 @@ from threading import Lock
 from .common import clear_queue, Full, Empty
 from deepomatic.api.exceptions import BadStatus
 from .exceptions import DeepoCLIException
-
+import time
 
 LOGGER = logging.getLogger(__name__)
 QUEUE_MAX_SIZE = 50
@@ -161,6 +161,8 @@ class ThreadBase(object):
                         msg_out = self.process_msg(msg_in)
                         if msg_out is not None:
                             self.put_to_output(msg_out)
+                        else:
+                            self.task_done()
             if empty:
                 # don't touch until we have non performance regression tests
                 gevent.sleep(SLEEP_TIME)
@@ -225,15 +227,14 @@ class Pool(object):
         self.nb_thread = nb_thread
         self.name = name or thread_cls.__name__
         self.threads = []
-        self.thread_cls = thread_cls
-        self.thread_args = thread_args
-        self.thread_kwargs = thread_kwargs or {}
-
-    def start(self):
+        thread_kwargs = thread_kwargs or {}
         for i in range(self.nb_thread):
-            th = self.thread_cls(*self.thread_args, **self.thread_kwargs)
+            th = thread_cls(*thread_args, **thread_kwargs)
             th.name = '{}_{}'.format(self.name, i)
             self.threads.append(th)
+
+    def start(self):
+        for th in self.threads:
             th.start()
 
     def stop_when_empty(self):
@@ -323,7 +324,6 @@ class MainLoop(object):
         self.cleaned = True
 
     def run_forever(self):
-
         # Start threads
         for pool in self.pools:
             pool.start()

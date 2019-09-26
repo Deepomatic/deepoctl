@@ -160,11 +160,8 @@ class SendInferenceGreenlet(thread_base.Greenlet):
     def __init__(self, exit_event, input_queue, output_queue, current_messages, workflow, skip=None, inference_fps=float('inf')):
         super(SendInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
-        self.push_client = None
         self.skip = skip
         self._last_inference = 0
-
-    def init(self):
         self.push_client = self.workflow.new_client()
 
     def close(self):
@@ -200,13 +197,9 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
         super(ResultInferenceGreenlet, self).__init__(exit_event, input_queue, output_queue, current_messages)
         self.workflow = workflow
 
-    def init(self):
-        self.workflow.init()
-
     def process_msg(self, frame):
         try:
-            if frame.inference_async_result:
-                frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
+            frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
             return frame
         except InferenceError as e:
             self.current_messages.forget_frame(frame)

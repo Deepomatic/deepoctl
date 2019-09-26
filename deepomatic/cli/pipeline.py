@@ -60,7 +60,7 @@ class Pipeline(object):
                             else None)
         return cls(input, workflows, outputs, postprocessing)
 
-    def __init__(self, input, workflows, outputs, postprocessing, queue_max_size=QUEUE_MAX_SIZE):
+    def __init__(self, input, workflows, outputs, postprocessing, output_queue=None, queue_max_size=QUEUE_MAX_SIZE):
         # TODO: might need to rethink the whole pipeling for infinite streams
         # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
         queues = [Queue(maxsize=queue_max_size) for _ in range(
@@ -69,7 +69,7 @@ class Pipeline(object):
 
         self.exit_event = threading.Event()
         self.workflows = workflows
-        current_frames = CurrentFrames()
+        self.current_frames = CurrentFrames()
 
         # Initialize progress bar
         frame_count = input.get_frame_count()
@@ -77,14 +77,13 @@ class Pipeline(object):
         tqdmout = TqdmToLogger(LOGGER, level=LOGGER.getEffectiveLevel())
         pbar = tqdm(total=max_value, file=tqdmout, desc='Input processing', smoothing=0)
 
-
         pools = []
-        pools.extend(input.stages(queues, 0, current_frames, self.exit_event))
+        pools.extend(input.stages(queues, 0, self.current_frames, self.exit_event))
         for i, workflow in enumerate(self.workflows):
-            pools.extend(workflow.stages(queues, i, current_frames, self.exit_event, input.is_infinite()))
+            pools.extend(workflow.stages(queues, i, self.current_frames, self.exit_event, input.is_infinite()))
 
         # Output frames/predictions
-        pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], None, current_frames, pbar.update, outputs, postprocessing)))
+        pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], output_queue, self.current_frames, pbar.update, outputs, postprocessing)))
 
         self.loop = MainLoop(pools, queues, pbar, self.exit_event, self.close)
 
