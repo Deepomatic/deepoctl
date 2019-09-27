@@ -134,7 +134,7 @@ class ThreadBase(object):
                 # don't touch until we have non performance regression tests
                 gevent.sleep(SLEEP_TIME)
 
-    def task_done(self):
+    def task_done(self, msg_in, msg_out):
         if self.input_queue is not None:
             self.input_queue.task_done()
 
@@ -160,7 +160,8 @@ class ThreadBase(object):
                         msg_out = self.process_msg(msg_in)
                         if msg_out is not None:
                             self.put_to_output(msg_out)
-                            self.task_done()
+                        self.task_done(msg_in, msg_out)
+
             if empty:
                 # don't touch until we have non performance regression tests
                 gevent.sleep(SLEEP_TIME)

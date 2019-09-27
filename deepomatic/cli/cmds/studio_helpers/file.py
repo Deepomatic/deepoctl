@@ -56,7 +56,6 @@ class UploadImageGreenlet(Greenlet):
 
         if self.on_progress:
             self.on_progress(len(batch))
-        self.task_done()
 
 
 class DatasetFiles(object):

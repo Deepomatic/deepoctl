@@ -70,7 +70,13 @@ def get_outputs(kwargs):
     return outputs
 
 
+class NotProcessedYet(object):
+    pass
+
+
 class OutputThread(Thread):
+    NOT_PROCESSED_YET = NotProcessedYet()
+
     def __init__(self, exit_event, input_queue, output_queue, current_messages,
                  on_progress, outputs, postprocessing):
         super(OutputThread, self).__init__(exit_event, input_queue,
@@ -103,13 +109,15 @@ class OutputThread(Thread):
             frame = super(OutputThread, self).pop_input()
         return frame
 
-    def task_done(self):
-        super(OutputThread, self).task_done()
-    
+    def task_done(self, frame_in, frame_out):
+        if frame_out is not self.NOT_PROCESSED_YET:
+            super(OutputThread, self).task_done(frame_in, frame_out)
+            self.frame_to_output = None
+
     def process_msg(self, frame):
         if self.frame_to_output != frame.frame_number:
             self.frames_to_check_first[frame.frame_number] = frame
-            return
+            return self.NOT_PROCESSED_YET
 
         if self.postprocessing is not None:
             self.postprocessing(frame)
@@ -122,7 +130,6 @@ class OutputThread(Thread):
         if self.on_progress:
             self.on_progress()
 
-        self.frame_to_output = None
         if self.output_queue is not None:
             return frame
         return None
