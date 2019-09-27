@@ -129,7 +129,6 @@ class ThreadBase(object):
         while True:
             try:
                 self.output_queue.put(msg_out, block=False)
-                self.task_done()
                 break
             except Full:
                 # don't touch until we have non performance regression tests
@@ -161,7 +160,6 @@ class ThreadBase(object):
                         msg_out = self.process_msg(msg_in)
                         if msg_out is not None:
                             self.put_to_output(msg_out)
-                        else:
                             self.task_done()
             if empty:
                 # don't touch until we have non performance regression tests

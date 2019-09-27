@@ -105,7 +105,6 @@ class OutputThread(Thread):
 
     def task_done(self):
         super(OutputThread, self).task_done()
-        self.frame_to_output = None        
     
     def process_msg(self, frame):
         if self.frame_to_output != frame.frame_number:
@@ -123,6 +122,7 @@ class OutputThread(Thread):
         if self.on_progress:
             self.on_progress()
 
+        self.frame_to_output = None
         if self.output_queue is not None:
             return frame
         return None
