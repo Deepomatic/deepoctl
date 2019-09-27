@@ -109,14 +109,23 @@ class OutputThread(Thread):
             frame = super(OutputThread, self).pop_input()
         return frame
 
+    def put_to_output(self, frame_out):
+        if frame_out is self.NOT_PROCESSED_YET:
+            # Nothing to output
+            return
+        super(OutputThread, self).put_to_output(frame_out)
+
     def task_done(self, frame_in, frame_out):
-        if frame_out is not self.NOT_PROCESSED_YET:
-            super(OutputThread, self).task_done(frame_in, frame_out)
-            self.frame_to_output = None
+        if frame_out is self.NOT_PROCESSED_YET:
+            # We kept the frame for later, the task is not done
+            return
+        super(OutputThread, self).task_done(frame_in, frame_out)
+        self.frame_to_output = None
 
     def process_msg(self, frame):
         if self.frame_to_output != frame.frame_number:
             self.frames_to_check_first[frame.frame_number] = frame
+            # We keep it for later
             return self.NOT_PROCESSED_YET
 
         if self.postprocessing is not None:
