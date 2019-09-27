@@ -107,10 +107,13 @@ class InputThread(Thread):
 
 class InputData(object):
     def __init__(self, descriptor, **kwargs):
-        self._descriptor = descriptor
         self._args = kwargs
-        self._name, _ = os.path.splitext(os.path.basename(str(descriptor)))
+        self._descriptor = descriptor
         self._filename = str(descriptor)
+        self._name = os.path.basename(os.path.normpath(self._filename))
+        base, ext = os.path.splitext(self._name)
+        if ext:
+            self._name = '{}_{}'.format(base, ext.lstrip('.'))
         recognition_id = kwargs.get('recognition_id', '')
         self._reco = '' if recognition_id is None else recognition_id
 

@@ -86,6 +86,7 @@ class ThreadBase(object):
         self.exit_event = exit_event
         self.stop_asked = False
         self.name = name or self.__class__.__name__
+        # Allow to not stop when an item is still being processed
         self.processing_item_lock = Lock()
         self.current_messages = current_messages
         self.alive = False
@@ -99,9 +100,22 @@ class ThreadBase(object):
         return True
 
     def stop(self):
+        # Can be called from the same thread or from another
         self.stop_asked = True
 
-    def stop_when_empty(self):
+    def wait_until_nothing_to_process(self):
+        # Must be called externally (from another thread)
+
+        if self.input_queue is None:
+            # When ThreadBase has no input queue
+            # Either the ThreadBase stop by itself by calling self.stop()
+            # Either another thread call thread/pool.stop()
+            # Otherwise it will wait indefinitely
+            self.join()
+            return
+
+        # When ThreadBase has an input queue and previous pools are stopped
+        # We can stop when the input queue is empty
         long_sleep = 0.05
         sleep_time = long_sleep
         while not self.exit_event.is_set():
@@ -236,9 +250,10 @@ class Pool(object):
         for th in self.threads:
             th.start()
 
-    def stop_when_empty(self):
+    def wait_until_nothing_to_process(self):
+        # Must be called externally (from another thread)
         for th in self.threads:
-            th.stop_when_empty()
+            th.wait_until_nothing_to_process()
 
     def stop(self):
         for th in self.threads:
@@ -302,6 +317,7 @@ class MainLoop(object):
             self.cleanup_func()
 
         # Compute the stats on number of errors
+        # pbar total may be None for infinite streams
         total_inputs = float('inf') if self.pbar.total is None else self.pbar.total
         inputs_without_error = self.pbar.n
 
@@ -312,9 +328,7 @@ class MainLoop(object):
 
         # Display errors or images stopped if needed
         if inputs_without_error < total_inputs and self.stop_asked:
-            LOGGER.warning('Handled {} frames out of {} before stopping.'.format(
-                total_inputs - inputs_without_error, total_inputs
-            ))
+            LOGGER.warning('Handled {} frames out of {} before stopping.'.format(inputs_without_error, total_inputs))
         elif inputs_without_error < total_inputs:
             LOGGER.warning('Encountered an unexpected exception during handling of {} frames out of {}.'.format(
                 total_inputs - inputs_without_error, total_inputs
@@ -331,7 +345,9 @@ class MainLoop(object):
         gevent.signal(gevent.signal.SIGTERM, self.stop)
 
         for pool in self.pools:
-            pool.stop_when_empty()
+            # Either pools stop by themself
+            # Or they will get stopped when input queue is empty
+            pool.wait_until_nothing_to_process()
 
         if not self.exit_event.is_set():
             gevent.signal(gevent.signal.SIGINT, lambda: signal.SIG_IGN)
