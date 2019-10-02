@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 import threading
+import time
 from .json_schema import is_valid_studio_json, is_valid_vulcan_json
 from .exceptions import DeepoCLICredentialsError
 from .thread_base import Pool, Thread, MainLoop, CurrentMessages, blocking_lock, QUEUE_MAX_SIZE
@@ -404,6 +405,27 @@ class StreamInputData(VideoInputData):
     def __init__(self, descriptor, **kwargs):
         super(StreamInputData, self).__init__(descriptor, **kwargs)
         self._name = 'stream_%s_%s' % ('%05d', self._reco)
+        self._last_read = None
+
+    def _grab_next(self):
+        ret = super(StreamInputData, self)._grab_next()
+        self._update_video_fps()
+        return ret
+
+    def _read_next(self):
+        ret = super(StreamInputData, self)._read_next()
+        self._update_video_fps()
+        return ret
+
+    def _update_video_fps(self):
+        last = self._last_read
+        now = time.time()
+        self._last_read = now
+        if last is not None:
+            dt = now - last
+            self._last_read = now
+            alpha = 0.8
+            self._video_fps = (1-alpha) / dt + alpha * self._video_fps
 
     def get_frame_count(self):
         return -1
