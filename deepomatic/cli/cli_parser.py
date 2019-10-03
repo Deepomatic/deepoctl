@@ -54,6 +54,7 @@ def argparser_init():
         parser.add_argument('-u', '--amqp_url', help="AMQP url for on-premises deployments.")
         parser.add_argument('-k', '--routing_key', help="Recognition routing key for on-premises deployments.")
         parser.add_argument('-t', '--threshold', type=float, help="Threshold above which a prediction is considered valid.", default=None)
+        parser.add_argument('--measure_fps', dest='measure_fps', action='store_true', help='For stream inputs only, estimates the real framerate by measuring the time between each frame.')
         parser.add_argument('--input_fps', type=int, help="FPS used for input video frame skipping and extraction. If higher than the original video FPS, all frames will be analysed only once having the same effect as not using this parameter. If lower than the original video FPS, some frames will be discarded to simulate an input of the given FPS.", default=None)
         parser.add_argument('--skip_frame', type=int, help="Number of frame to skip between two frames from the input. It can be combined with input_fps", default=0)
         parser.add_argument('--output_fps', type=int, help="FPS usef for output video reconstruction.", default=None)

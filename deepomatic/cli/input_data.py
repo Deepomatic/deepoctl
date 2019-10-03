@@ -406,15 +406,20 @@ class StreamInputData(VideoInputData):
         super(StreamInputData, self).__init__(descriptor, **kwargs)
         self._name = 'stream_%s_%s' % ('%05d', self._reco)
         self._last_read = None
+        self._measure_fps = kwargs.get('measure_fps')
+        if self._measure_fps:
+            self._video_fps = 0
 
     def _grab_next(self):
         ret = super(StreamInputData, self)._grab_next()
-        self._update_video_fps()
+        if self._measure_fps:
+            self._update_video_fps()
         return ret
 
     def _read_next(self):
         ret = super(StreamInputData, self)._read_next()
-        self._update_video_fps()
+        if self._measure_fps:
+            self._update_video_fps()
         return ret
 
     def _update_video_fps(self):
@@ -425,7 +430,8 @@ class StreamInputData(VideoInputData):
             dt = now - last
             self._last_read = now
             alpha = 0.8
-            self._video_fps = (1-alpha) / dt + alpha * self._video_fps
+            self._video_fps = (1 - alpha) / dt + alpha * self._video_fps
+            LOGGER.debug('measured fps: %f' % self._video_fps)
 
     def get_frame_count(self):
         return -1
