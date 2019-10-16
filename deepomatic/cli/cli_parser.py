@@ -26,6 +26,7 @@ def argparser_init():
         '-v', '--version', action='version',
         version='{title} {version}'.format(title=__title__, version=__version__)
     )
+
     subparsers = argparser.add_subparsers(dest='command', help='')
     subparsers.required = True
     subparsers_dict = {}
@@ -36,6 +37,13 @@ def argparser_init():
     infer_parser = subparsers.add_parser('infer', help=help_msg, description=desc_mgs)
     infer_parser.set_defaults(func=input_loop)
     subparsers_dict['infer'] = infer_parser
+
+   # Initialize subparser: noop
+    help_msg = "Does nothing but reading the input and outputting it in the specified format, without predictions."
+    desc_mgs = help_msg + " Typical usage is: deepo noop -i 0 -o window"
+    noop_parser = subparsers.add_parser('noop', help=help_msg, description=desc_mgs)
+    noop_parser.set_defaults(func=input_loop)
+    subparsers_dict['noop'] = noop_parser
 
     # Initialize subparser: draw
     help_msg = "Generates new images and videos with predictions results drawn on them. Computes prediction if JSON has not yet been generated."
@@ -63,28 +71,32 @@ def argparser_init():
     subparsers_dict['add_images'] = add_images_parser
 
     # Define argument groups for easier reading
-    input_groups = {cmd: subparsers_dict[cmd].add_argument_group('Input parameters') for cmd in ['infer', 'draw', 'blur', 'add_images']}
-    output_groups = {cmd: subparsers_dict[cmd].add_argument_group('Output parameters') for cmd in ['infer', 'draw', 'blur']}
+    input_groups = {cmd: subparsers_dict[cmd].add_argument_group('Input parameters') for cmd in ['infer', 'draw', 'blur', 'noop', 'add_images']}
+    output_groups = {cmd: subparsers_dict[cmd].add_argument_group('Output parameters') for cmd in ['infer', 'draw', 'blur', 'noop']}
     model_groups = {cmd: subparsers_dict[cmd].add_argument_group('Model parameters') for cmd in ['infer', 'draw', 'blur']}
     onprem_groups = {cmd: subparsers_dict[cmd].add_argument_group('On-premises parameters') for cmd in ['infer', 'draw', 'blur']}
-    option_groups = {cmd: subparsers_dict[cmd].add_argument_group('Option parameters') for cmd in ['infer', 'draw', 'blur', 'add_images']}
+    option_groups = {cmd: subparsers_dict[cmd].add_argument_group('Option parameters') for cmd in ['infer', 'draw', 'blur', 'noop', 'add_images']}
 
     # Define input group  for infer draw blur
-    for cmd in ['infer', 'draw', 'blur']:
+    for cmd in ['infer', 'draw', 'blur', 'noop']:
         group = input_groups[cmd]
         group.add_argument('-i', '--input', required=True, help="Input path, either an image (*{}), a video (*{}), a directory, a stream (*{}), or a Studio json (*.json). If the given path is a directory, it will recursively run inference on all the supported files in this directory if the -R option is used.".format(', *'.join(SUPPORTED_IMAGE_INPUT_FORMAT), ', *'.join(SUPPORTED_VIDEO_INPUT_FORMAT), ', *'.join(SUPPORTED_PROTOCOLS_INPUT)))
         group.add_argument('--input_fps', type=int, help="FPS used for input video frame skipping and extraction. If higher than the original video FPS, all frames will be analysed only once having the same effect as not using this parameter. If lower than the original video FPS, some frames will be discarded to simulate an input of the given FPS.", default=None)
         group.add_argument('--skip_frame', type=int, help="Number of frame to skip between two frames from the input. It can be combined with input_fps", default=0)
 
     # Define output group for infer draw blur
-    for cmd in ['infer', 'draw', 'blur']:
+    for cmd in ['infer', 'draw', 'blur', 'noop']:
         group = output_groups[cmd]
         group.add_argument('-o', '--outputs', required=True, nargs='+', help="Output path, either an image (*{}), a video (*{}), a json (*.json) or a directory.".format(', *'.join(SUPPORTED_IMAGE_OUTPUT_FORMAT), ', *'.join(SUPPORTED_VIDEO_OUTPUT_FORMAT)))
         group.add_argument('--output_fps', type=int, help="FPS used for output video reconstruction.", default=None)
+        
+    # Define output group for infer draw blur
+    for cmd in ['infer', 'draw', 'blur']:
+        group = output_groups[cmd]
         group.add_argument('-s', '--studio_format', action='store_true', help="Convert deepomatic run predictions into deepomatic studio format.")
 
-    # Define output group for draw blur
-    for cmd in ['draw', 'blur']:
+    # Define output group for draw blur noop
+    for cmd in ['draw', 'blur', 'noop']:
         group = output_groups[cmd]
         group.add_argument('-F', '--fullscreen', help="Fullscreen if window output.", action="store_true")
 
@@ -130,13 +142,13 @@ def argparser_init():
     input_groups['add_images'].add_argument('--json', dest='json_file', action='store_true', help='Look for JSON files instead of images.')
     option_groups['add_images'].add_argument('--set_metadata_path', dest='set_metadata_path', action='store_true', help='Add the relative path as metadata.')
 
-    # Define input groupe for infer draw blur add_images
-    for cmd in ['infer', 'draw', 'blur', 'add_images']:
+    # Define input groupe for infer draw blur noop add_images
+    for cmd in ['infer', 'draw', 'blur', 'noop', 'add_images']:
         group = input_groups[cmd]
         group.add_argument('-R', '--recursive', dest='recursive', action='store_true', help='If a directory input is used, goes through all files in subdirectories.')
 
-    # Define option group for infer draw blur add_images
-    for cmd in ['infer', 'draw', 'blur', 'add_images']:
+    # Define option group for infer draw blur noop add_images
+    for cmd in ['infer', 'draw', 'blur', 'noop', 'add_images']:
         group = option_groups[cmd]
         group.add_argument('--verbose', dest='verbose', action='store_true', help='Increase output verbosity.')
 
