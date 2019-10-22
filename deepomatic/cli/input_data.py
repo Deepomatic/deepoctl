@@ -471,12 +471,11 @@ class AMQPInputData(InputData):
         return self
 
     def __next__(self):
-        while True:
-        # try:
+        try:
             response = self._consumer.get()
-        # except rpc.amqp.exceptions.Timeout as t:
-        #     LOGGER.debug('Timeout in AMQP input: %s' % t)
-        #     raise StopIteration()
+        except rpc.amqp.exceptions.Timeout as t:
+            LOGGER.debug('Timeout in AMQP input: %s' % t)
+            raise StopIteration()
 
             # parse message
             message = rpc.buffers.protobuf.cli.Message_pb2.Message.FromString(response.body)
