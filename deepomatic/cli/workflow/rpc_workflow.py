@@ -1,7 +1,8 @@
 import cv2
 import time
 import logging
-from .workflow_abstraction import AbstractWorkflow, InferenceError, InferenceTimeout
+from .workflow_abstraction import AbstractWorkflow
+from ..exceptions import ResultInferenceError, ResultInferenceTimeout
 from ..exceptions import DeepoRPCRecognitionError, DeepoRPCUnavailableError
 
 def import_rpc_package(should_raise=False):
@@ -61,10 +62,10 @@ class RpcRecognition(AbstractWorkflow):
                     outputs = response.to_parsed_result_buffer()
                     predictions = {'outputs': [{'labels': protobuf.json_format.MessageToDict(output.labels, including_default_value_fields=True, preserving_proto_field_name=True)} for output in outputs]}
                     return predictions
-                except rpc.exceptions.ServerError as e:
-                    raise InferenceError({'error': str(e), 'code': e.code})
-            except rpc.amqp.exceptions.Timeout:
-                raise InferenceTimeout(timeout)
+                except ServerError as e:
+                    raise ResultInferenceError({'error': str(e), 'code': e.code})
+            except Timeout:
+                raise ResultInferenceTimeout(timeout)
 
     def __init__(self, recognition_version_id, amqp_url, routing_key, recognition_cmd_kwargs=None):
         super(RpcRecognition, self).__init__('recognition_{}'.format(recognition_version_id))

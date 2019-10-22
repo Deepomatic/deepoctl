@@ -126,20 +126,27 @@ def input_loop(kwargs, postprocessing=None):
     tqdmout = TqdmToLogger(LOGGER, level=LOGGER.getEffectiveLevel())
     pbar = tqdm(total=max_value, file=tqdmout, desc='Input processing', smoothing=0)
 
-    # TODO: might need to rethink the whole pipeling for infinite streams
-    # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
-    queue_cls = Queue
-    queues = [queue_cls(maxsize=QUEUE_MAX_SIZE) for _ in range(4)]
-
-    if kwargs['realtime']:
-        kwargs['realtime'] = queues[3]
-
     # Initialize workflow for mutual use between send inference pool and result inference pool
     try:
         workflow = get_workflow(kwargs)
     except DeepoCLICredentialsError as e:
         LOGGER.error(str(e))
         sys.exit(1)
+
+    # For realtime, queue should be LIFO
+    # TODO: might need to rethink the whole pipeling for infinite streams
+    # IMPORTANT: maxsize is important, it allows to regulate the pipeline and avoid to pushes too many requests to rabbitmq when we are already waiting for many results
+    queue_cls = LifoQueue if inputs.is_infinite() else Queue
+
+    nb_queue = 2 # input => prepare inference => output
+    if workflow:
+        nb_queue += 2 # prepare inference => send inference => result inference
+
+    queues = [queue_cls(maxsize=QUEUE_MAX_SIZE) for _ in range(nb_queue)]
+
+    if workflow and kwargs['realtime']:
+        kwargs['realtime'] = queues[-1]
+
     exit_event = threading.Event()
 
     current_frames = CurrentFrames()
@@ -147,16 +154,22 @@ def input_loop(kwargs, postprocessing=None):
     pools = [
         Pool(1, InputThread, thread_args=(exit_event, None, queues[0], inputs)),
         # Encode image into jpeg
-        Pool(1, PrepareInferenceThread, thread_args=(exit_event, queues[0], queues[1], current_frames)),
-        # Send inference
-        Pool(1, SendInferenceGreenlet, thread_args=(exit_event, queues[1], queues[2], current_frames, workflow), thread_kwargs=kwargs),
-        # Gather inference predictions from the worker(s)
-        Pool(1, ResultInferenceGreenlet, thread_args=(exit_event, queues[2], queues[3], current_frames, workflow), thread_kwargs=kwargs),
-        # Output predictions
-        Pool(1, OutputThread, thread_args=(exit_event, queues[3], None, current_frames, pbar.update, postprocessing), thread_kwargs=kwargs)
+        Pool(1, PrepareInferenceThread, thread_args=(exit_event, queues[0], queues[1], current_frames))
     ]
 
-    loop = MainLoop(pools, queues, pbar, exit_event, lambda: workflow.close())
+    if workflow:
+        pools.extend([
+            # Send inference
+            Pool(5, SendInferenceGreenlet, thread_args=(exit_event, queues[1], queues[2], current_frames, workflow)),
+            # Gather inference predictions from the worker(s)
+            Pool(1, ResultInferenceGreenlet, thread_args=(exit_event, queues[2], queues[3], current_frames, workflow), thread_kwargs=kwargs),
+        ])
+
+    # Output predictions
+    pools.append(Pool(1, OutputThread, thread_args=(exit_event, queues[-1], None, current_frames, pbar.update, postprocessing), thread_kwargs=kwargs))
+
+    loop = MainLoop(pools, queues, pbar, exit_event, current_frames, lambda: workflow.close() if workflow else None)
+
     try:
         stop_asked = loop.run_forever()
     except Exception:
@@ -175,10 +188,13 @@ def input_loop(kwargs, postprocessing=None):
 
 class InputData(object):
     def __init__(self, descriptor, **kwargs):
-        self._descriptor = descriptor
         self._args = kwargs
-        self._name, _ = os.path.splitext(os.path.basename(str(descriptor)))
+        self._descriptor = descriptor
         self._filename = str(descriptor)
+        self._name = os.path.basename(os.path.normpath(self._filename))
+        base, ext = os.path.splitext(self._name)
+        if ext:
+            self._name = '{}_{}'.format(base, ext.lstrip('.'))
         recognition_id = kwargs.get('recognition_id', '')
         self._reco = '' if recognition_id is None else recognition_id
 

@@ -41,11 +41,15 @@ def blocking_lock(lock, sleep_time=SLEEP_TIME):
 
 class CurrentMessages(object):
     """
-    Track all messages currently being processed in the Pipeline
+    Track all messages currently being processed in the Pipeline.
+    Also allow to track number of errors.
     """
     def __init__(self):
         self.heap_lock = Lock()
         self.messages = []
+        self.nb_errors = 0
+        self.nb_successes = 0
+        self.nb_added_messages = 0
 
     def lock(self):
         return blocking_lock(self.heap_lock)
@@ -53,6 +57,7 @@ class CurrentMessages(object):
     def add_message(self, msg):
         with self.lock():
             heapq.heappush(self.messages, msg)
+            self.nb_added_messages += 1
 
     def get_min(self):
         with self.lock():
@@ -66,12 +71,30 @@ class CurrentMessages(object):
                 return heapq.heappop(self.messages)
         return None
 
-    def forget_message(self, msg):
+    def report_success(self):
+        self.report_successes(1)
+
+    def report_successes(self, nb_successes):
+        with self.lock():
+            self.nb_successes += nb_successes
+
+    def report_error(self):
+        self.report_errors(1)
+
+    def report_errors(self, nb_errors):
+        with self.lock():
+            self.nb_errors += nb_errors
+
+    def forget_message(self, msg, count_as_error=True):
         try:
             with self.lock():
+                if count_as_error:
+                    self.nb_errors += 1
                 self.messages.remove(msg)
                 heapq.heapify(self.messages)
         except ValueError as e:
+            # TODO: remove the try/catch
+            # we should call it only if we are sure the message it there
             LOGGER.error(str(e))
 
 
@@ -86,6 +109,7 @@ class ThreadBase(object):
         self.exit_event = exit_event
         self.stop_asked = False
         self.name = name or self.__class__.__name__
+        # Allow to not stop when an item is still being processed
         self.processing_item_lock = Lock()
         self.current_messages = current_messages
         self.alive = False
@@ -99,9 +123,22 @@ class ThreadBase(object):
         return True
 
     def stop(self):
+        # Can be called from the same thread or from another
         self.stop_asked = True
 
-    def stop_when_empty(self):
+    def wait_until_nothing_to_process(self):
+        # Must be called externally (from another thread)
+
+        if self.input_queue is None:
+            # When ThreadBase has no input queue
+            # Either the ThreadBase stop by itself by calling self.stop()
+            # Either another thread call thread/pool.stop()
+            # Otherwise it will wait indefinitely
+            self.join()
+            return
+
+        # When ThreadBase has an input queue and previous pools are stopped
+        # We can stop when the input queue is empty
         long_sleep = 0.05
         sleep_time = long_sleep
         while not self.exit_event.is_set():
@@ -237,9 +274,10 @@ class Pool(object):
             self.threads.append(th)
             th.start()
 
-    def stop_when_empty(self):
+    def wait_until_nothing_to_process(self):
+        # Must be called externally (from another thread)
         for th in self.threads:
-            th.stop_when_empty()
+            th.wait_until_nothing_to_process()
 
     def stop(self):
         for th in self.threads:
@@ -251,11 +289,12 @@ class Pool(object):
 
 
 class MainLoop(object):
-    def __init__(self, pools, queues, pbar, exit_event, cleanup_func=None):
+    def __init__(self, pools, queues, pbar, exit_event, current_messages, cleanup_func=None):
         self.pools = pools
         self.queues = queues
         self.pbar = pbar
         self.exit_event = exit_event
+        self.current_messages = current_messages
         self.cleanup_func = cleanup_func
         self.stop_asked = 0
         self.cleaned = False
@@ -303,24 +342,17 @@ class MainLoop(object):
             self.cleanup_func()
 
         # Compute the stats on number of errors
-        total_inputs = self.pbar.total
-        inputs_without_error = self.pbar.n
+        # pbar total may be None for infinite streams
+        total_inputs = float('inf') if self.pbar.total is None else self.pbar.total
 
-        # Update progress bar to 100% and close it
-        if inputs_without_error < total_inputs:
-            self.pbar.update(total_inputs - inputs_without_error)
+        nb_uncompleted = (self.current_messages.nb_added_messages -
+                          self.current_messages.nb_errors -
+                          self.current_messages.nb_successes)
         self.pbar.close()
-
-        # Display errors or images stopped if needed
-        if inputs_without_error < total_inputs and self.stop_asked:
-            LOGGER.warning('Handled {} frames out of {} before stopping.'.format(
-                total_inputs - inputs_without_error, total_inputs
-            ))
-        elif inputs_without_error < total_inputs:
-            LOGGER.warning('Encountered an unexpected exception during handling of {} frames out of {}.'.format(
-                total_inputs - inputs_without_error, total_inputs
-            ))
-
+        LOGGER.info('Summary: errors={} uncompleted={} successful={} total={}.'.format(self.current_messages.nb_errors,
+                                                                                       nb_uncompleted,
+                                                                                       self.current_messages.nb_successes,
+                                                                                       total_inputs))
         self.cleaned = True
 
     def run_forever(self):
@@ -333,7 +365,9 @@ class MainLoop(object):
         gevent.signal(gevent.signal.SIGTERM, self.stop)
 
         for pool in self.pools:
-            pool.stop_when_empty()
+            # Either pools stop by themself
+            # Or they will get stopped when input queue is empty
+            pool.wait_until_nothing_to_process()
 
         if not self.exit_event.is_set():
             gevent.signal(gevent.signal.SIGINT, lambda: signal.SIG_IGN)
