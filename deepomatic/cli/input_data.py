@@ -408,6 +408,7 @@ class StreamInputData(VideoInputData):
         self._last_read = None
         self._measure_fps = kwargs.get('measure_fps')
         if self._measure_fps:
+            # overwrite the parent attribute, because it will be dynamically measured
             self._video_fps = 0
 
     def _grab_next(self):
