@@ -429,7 +429,7 @@ class StreamInputData(VideoInputData):
         if last is not None:
             dt = now - last
             self._last_read = now
-            alpha = 0.8
+            alpha = 0.95
             self._video_fps = (1 - alpha) / dt + alpha * self._video_fps
             LOGGER.debug('measured fps: %f' % self._video_fps)
 
