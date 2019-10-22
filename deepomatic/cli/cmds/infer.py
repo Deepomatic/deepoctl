@@ -160,7 +160,6 @@ class SendInferenceGreenlet(thread_base.Greenlet):
     def process_msg(self, frame):
         try:
             if self.realtime and self.output_queue.full():
-                print('skip', frame.video_frame_index)
                 frame.predictions = predictions = {
                     'outputs': [{
                         'labels': {
@@ -171,7 +170,6 @@ class SendInferenceGreenlet(thread_base.Greenlet):
                 }
                 self.realtime.put(frame)
                 return None
-            print('infer', frame.video_frame_index)
             frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
             return frame
         except InferenceError as e:
