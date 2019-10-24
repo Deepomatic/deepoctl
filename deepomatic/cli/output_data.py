@@ -13,7 +13,6 @@ from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
 
-
 try:
     # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
     write_bytes_to_stdout = sys.stdout.buffer.write
@@ -188,7 +187,6 @@ class ImageOutputData(OutputData):
             pass
         finally:
             write_frame_to_disk(frame, path)
-
 
 class VideoOutputData(OutputData):
     @classmethod
