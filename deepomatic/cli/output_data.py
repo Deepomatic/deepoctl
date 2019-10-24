@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import cv2
-import imutils
 import logging
 import traceback
 from .thread_base import Thread
@@ -30,8 +29,6 @@ def save_json_to_file(json_data, json_path):
             LOGGER.debug('Writing %s.json done' % json_path)
     except Exception:
         raise DeepoSaveJsonToFileError("Could not save file {} in json format: {}".format(json_path, traceback.format_exc()))
-
-    return
 
 
 def get_output(descriptor, kwargs):
@@ -209,15 +206,9 @@ class DisplayOutputData(OutputData):
 
         if self._fullscreen:
             cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
-            if imutils.is_cv2():
-                prop_value = cv2.cv.CV_WINDOW_FULLSCREEN
-            elif imutils.is_cv3():
-                prop_value = cv2.WINDOW_FULLSCREEN
-            else:
-                assert('Unsupported opencv version')
             cv2.setWindowProperty(self._window_name,
                                   cv2.WND_PROP_FULLSCREEN,
-                                  prop_value)
+                                  cv2.WINDOW_FULLSCREEN)
 
     def output_frame(self, frame):
         if frame.output_image is None:
@@ -372,10 +363,8 @@ class DirectoryOutputData(OutputData):
 
         # If the input is an image, then use the same extension if supported
         _, ext = os.path.splitext(frame.filename)
-        if ext.lower() in SUPPORTED_IMAGE_OUTPUT_FORMAT:
-            pass
-        # Otherwise defaults to jpg
-        else:
+        if ext.lower() not in SUPPORTED_IMAGE_OUTPUT_FORMAT:
+            # Otherwise defaults to jpg
             ext = '.jpg'
 
         # Finally write the image to file with its name
