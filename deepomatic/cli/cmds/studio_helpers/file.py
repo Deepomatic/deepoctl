@@ -47,7 +47,7 @@ class UploadImageGreenlet(Greenlet):
                 self.current_messages.report_error()
                 LOGGER.error('Something when wrong with {}: {}. Skipping it.'.format(file['path'], e))
         try:
-            rq = self._helper.post(url, data={"objects": json.dumps(meta)}, content_type='multipart/form', files=files)
+            rq = self._helper.post(url, data={"objects": json.dumps(meta)}, content_type='multipart/mixed', files=files)
             self._task.retrieve(rq['task_id'])
         except RuntimeError as e:
             self.current_messages.report_errors(len(meta))
@@ -110,9 +110,9 @@ class DatasetFiles(object):
                 try:
                     with open(upload_file, 'r') as fd:
                         json_data = json.load(fd)
-                except IOError:
+                except IOError as e:
                     raise DeepoOpenJsonError("Upload JSON file {} failed: {}".format(upload_file, e))
-                except ValueError as e:
+                except ValueError:
                     raise DeepoOpenJsonError("Upload JSON file {} is not a valid JSON file".format(upload_file))
 
                 # If it's a Studio json, use it directly

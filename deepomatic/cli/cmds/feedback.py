@@ -5,28 +5,28 @@ import sys
 import logging
 import threading
 from tqdm import tqdm
-from .studio_helpers.http_helper import HTTPHelper
+from deepomatic.api.http_helper import HTTPHelper
 from .studio_helpers.file import DatasetFiles, UploadImageGreenlet
 from .studio_helpers.task import Task
-from ..common import TqdmToLogger, Queue, SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_VIDEO_INPUT_FORMAT, SUPPORTED_FILE_INPUT_FORMAT
+from ..common import TqdmToLogger, Queue, SUPPORTED_FILE_INPUT_FORMAT
 from ..thread_base import Pool, MainLoop, CurrentMessages
-
+from ..version import __title__, __version__
 
 ###############################################################################
 
 GREENLET_NUMBER = int(os.getenv('DEEPOMATIC_CLI_ADD_IMAGES_CONCURRENCY', 5))
 LOGGER = logging.getLogger(__name__)
 API_HOST = os.getenv('STUDIO_URL', 'https://studio.deepomatic.com/api/')
+DEFAULT_USER_AGENT_PREFIX = user_agent_prefix = '{}/{}'.format(
+    __title__, __version__)
 
 ###############################################################################
 
 
 class Client(object):
-    def __init__(self, token=None, verify_ssl=True, check_query_parameters=True, host=None, user_agent_suffix='', pool_maxsize=GREENLET_NUMBER):
-        if host is None:
-            host = API_HOST
-
-        self.http_helper = HTTPHelper(token, verify_ssl, host, check_query_parameters, user_agent_suffix, pool_maxsize)
+    def __init__(self, api_key=None, user_agent_prefix=DEFAULT_USER_AGENT_PREFIX, pool_maxsize=GREENLET_NUMBER):
+        self.http_helper = HTTPHelper(api_key=api_key, host=API_HOST, user_agent_prefix=user_agent_prefix,
+                                      pool_maxsize=pool_maxsize, version=None)
         self.task = Task(self.http_helper)
 
 
@@ -43,7 +43,8 @@ def get_all_files_with_ext(path, supported_ext, recursive=True):
             elif os.path.isfile(file_path) and os.path.splitext(file_path)[1].lower() in supported_ext:
                 all_files.append(file_path)
     else:
-        raise RuntimeError("The path {} is neither a supported file {} nor a directory".format(path, supported_ext))
+        raise RuntimeError(
+            "The path {} is neither a supported file {} nor a directory".format(path, supported_ext))
 
     return all_files
 
@@ -76,7 +77,8 @@ def main(args):
     set_metadata_path = args.get('set_metadata_path', False)
 
     # Scan to find all files
-    files = get_all_files(paths=paths, find_json=json_file, recursive=recursive)
+    files = get_all_files(
+        paths=paths, find_json=json_file, recursive=recursive)
 
     # TODO: add a maxsize to avoid taking too much memories
     # This implies reading twice to get the total_files
@@ -91,7 +93,8 @@ def main(args):
 
     # Initialize progress bar
     tqdmout = TqdmToLogger(LOGGER, level=logging.INFO)
-    pbar = tqdm(total=total_files, file=tqdmout, desc='Uploading images', smoothing=0)
+    pbar = tqdm(total=total_files, file=tqdmout,
+                desc='Uploading images', smoothing=0)
 
     pools = [
         Pool(GREENLET_NUMBER, UploadImageGreenlet,
