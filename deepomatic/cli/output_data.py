@@ -159,10 +159,6 @@ class OutputThread(Thread):
         # End of pipeline
         return None
 
-        if self.output_queue is not None:
-            return frame
-        return None
-
 class OutputData(object):
     def __init__(self, descriptor, **kwargs):
         self._descriptor = descriptor

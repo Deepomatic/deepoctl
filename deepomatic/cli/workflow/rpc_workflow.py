@@ -101,7 +101,7 @@ class RpcRecognition(AbstractWorkflow):
     def new_client(self):
         # Allow to create multiple clients for threads that will push
         # Since RPC client is not thread safe
-        return rpc.client.Client(self.amqp_url)
+        return rpc.client.Client(self._amqp_url)
 
     def close(self):
         if self._consumer is not None:

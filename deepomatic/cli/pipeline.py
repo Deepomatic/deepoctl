@@ -85,7 +85,7 @@ class Pipeline(object):
         # Output frames/predictions
         pools.append(Pool(1, OutputThread, thread_args=(self.exit_event, queues[-1], output_queue, self.current_frames, pbar.update, outputs, postprocessing)))
 
-        self.loop = MainLoop(pools, queues, pbar, self.exit_event, self.close)
+        self.loop = MainLoop(pools, queues, pbar, self.exit_event, self.current_frames, self.close)
 
 
     def run(self):
