@@ -2,7 +2,9 @@ import cv2
 import logging
 import time
 from text_unidecode import unidecode
-from ..workflow.workflow_abstraction import InferenceError, InferenceTimeout
+from ..exceptions import (SendInferenceError,
+                          ResultInferenceError,
+                          ResultInferenceTimeout)
 from .. import thread_base
 
 LOGGER = logging.getLogger(__name__)
@@ -132,8 +134,8 @@ class BlurImagePostprocessing(object):
                 if self._method == 'black':
                     cv2.rectangle(output_image, (xmin, ymin), (xmax, ymax), (0, 0, 0), -1)
                 elif self._method == 'gaussian':
-                    rectangle = frame[ymin:ymax, xmin:xmax]
-                    rectangle = cv2.GaussianBlur(rectangle, (15, 15), self._strength)
+                    rectangle = output_image[ymin:ymax, xmin:xmax]
+                    rectangle = cv2.GaussianBlur(rectangle, (0, 0), self._strength)
                     output_image[ymin:ymax, xmin:xmax] = rectangle
                 elif self._method == 'pixel':
                     rectangle = output_image[ymin:ymax, xmin:xmax]
@@ -189,8 +191,9 @@ class SendInferenceGreenlet(thread_base.Greenlet):
             self._last_inference = time.time()
             frame.inference_async_result = self.workflow.infer(frame.buf_bytes, self.push_client, frame.name)
             return frame
-        except InferenceError as e:
-            LOGGER.error('Error getting predictions for frame {}: {}'.format(frame, e))
+        except SendInferenceError as e:
+            self.current_messages.forget_frame(frame)
+            LOGGER.error('Error sending frame {}: {}'.format(frame, e))
             return None
 
 
@@ -203,10 +206,10 @@ class ResultInferenceGreenlet(thread_base.Greenlet):
         try:
             frame.predictions = frame.inference_async_result.get_predictions(timeout=60)
             return frame
-        except InferenceError as e:
+        except ResultInferenceError as e:
             self.current_messages.forget_frame(frame)
             LOGGER.error('Error getting predictions for frame {}: {}'.format(frame, e))
-        except InferenceTimeout as e:
+        except ResultInferenceTimeout as e:
             self.current_messages.forget_frame(frame)
             LOGGER.error("Couldn't get predictions in {} seconds. Ignoring frame {}.".format(e.timeout, frame))
         return None

@@ -2,7 +2,6 @@ import os
 import sys
 import json
 import cv2
-import imutils
 import logging
 import traceback
 from .thread_base import Thread
@@ -13,7 +12,6 @@ from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_FPS = 25
-
 
 try:
     # https://stackoverflow.com/questions/908331/how-to-write-binary-data-to-stdout-in-python-3
@@ -30,8 +28,6 @@ def save_json_to_file(json_data, json_path):
             LOGGER.debug('Writing %s.json done' % json_path)
     except Exception:
         raise DeepoSaveJsonToFileError("Could not save file {} in json format: {}".format(json_path, traceback.format_exc()))
-
-    return
 
 
 def get_output(descriptor, kwargs):
@@ -74,6 +70,15 @@ class NotProcessedYet(object):
     pass
 
 
+class NotProcessedYet(object):
+    # OutputThread can receive frames in wrong order
+    # When a frame arrives and is not the one we want to process,
+    # we cache it internally and return a NotProcessedYet object
+    # Then we override OutputThread.task_done so that we don't consider
+    # the task to be done when NotProcessedYet is returned
+    pass
+
+
 class OutputThread(Thread):
     NOT_PROCESSED_YET = NotProcessedYet()
 
@@ -111,7 +116,7 @@ class OutputThread(Thread):
 
     def put_to_output(self, frame_out):
         if frame_out is self.NOT_PROCESSED_YET:
-            # Nothing to output
+            # Nothing to output, the frame has not been processed yet
             return
         super(OutputThread, self).put_to_output(frame_out)
 
@@ -119,8 +124,15 @@ class OutputThread(Thread):
         if frame_out is self.NOT_PROCESSED_YET:
             # We kept the frame for later, the task is not done
             return
+
         super(OutputThread, self).task_done(frame_in, frame_out)
         self.frame_to_output = None
+
+        if self.output_queue is None:
+            # process_msg() returns frame None when output_queue is None
+            assert frame_out is None
+            # Reporting success only if last pool of the pipeline
+            self.current_messages.report_success()
 
     def process_msg(self, frame):
         if self.frame_to_output != frame.frame_number:
@@ -138,6 +150,14 @@ class OutputThread(Thread):
 
         if self.on_progress:
             self.on_progress()
+
+        if self.output_queue is not None:
+            # In some case we might attach other pools after the output pool
+            # In this case we return the frame for the next processing
+            return frame
+        # No other pool attached
+        # End of pipeline
+        return None
 
         if self.output_queue is not None:
             return frame
@@ -175,7 +195,6 @@ class ImageOutputData(OutputData):
             pass
         finally:
             write_frame_to_disk(frame, path)
-
 
 class VideoOutputData(OutputData):
     @classmethod
@@ -231,15 +250,9 @@ class DisplayOutputData(OutputData):
 
         if self._fullscreen:
             cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
-            if imutils.is_cv2():
-                prop_value = cv2.cv.CV_WINDOW_FULLSCREEN
-            elif imutils.is_cv3():
-                prop_value = cv2.WINDOW_FULLSCREEN
-            else:
-                assert('Unsupported opencv version')
             cv2.setWindowProperty(self._window_name,
                                   cv2.WND_PROP_FULLSCREEN,
-                                  prop_value)
+                                  cv2.WINDOW_FULLSCREEN)
 
     def output_frame(self, frame):
         if frame.output_image is None:
@@ -310,6 +323,10 @@ class JsonOutputData(OutputData):
 
     def output_frame(self, frame):
         self._i += 1
+        if frame.predictions is None:
+            # For noop command
+            LOGGER.warning('No predictions to output.')
+            return
         predictions = frame.predictions
         predictions['location'] = frame.filename
         predictions['data'] = {
@@ -391,10 +408,8 @@ class DirectoryOutputData(OutputData):
 
         # If the input is an image, then use the same extension if supported
         _, ext = os.path.splitext(frame.filename)
-        if ext.lower() in SUPPORTED_IMAGE_OUTPUT_FORMAT:
-            pass
-        # Otherwise defaults to jpg
-        else:
+        if ext.lower() not in SUPPORTED_IMAGE_OUTPUT_FORMAT:
+            # Otherwise defaults to jpg
             ext = '.jpg'
 
         # Finally write the image to file with its name
