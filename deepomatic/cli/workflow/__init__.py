@@ -1,6 +1,6 @@
 import logging
 from .cloud_workflow import CloudRecognition
-from .rpc_workflow import RpcRecognition
+from .rpc_workflow import RpcRecognition, requires_deepomatic_rpc, import_rpc_package
 from .json_workflow import JsonRecognition
 from ..exceptions import DeepoWorkflowError
 
@@ -19,7 +19,7 @@ def get_workflow(args):
     if pred_from_file:
         LOGGER.debug('Using JSON workflow with recognition_id {}'.format(recognition_id))
         return JsonRecognition(recognition_id, pred_from_file)
-    elif all([recognition_id, amqp_url, routing_key]):
+    elif all([amqp_url, routing_key]):
         LOGGER.debug('Using RPC workflow with recognition_id {}, amqp_url {} and routing_key {}'.format(recognition_id, amqp_url, routing_key))
         return RpcRecognition(recognition_id, amqp_url, routing_key)
     elif recognition_id:
