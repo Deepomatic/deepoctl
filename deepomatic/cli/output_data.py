@@ -7,7 +7,7 @@ import cv2
 import logging
 import traceback
 from .thread_base import Thread
-from .workflow import requires_deepomatic_rpc, import_rpc_package
+from .workflow.rpc_workflow import requires_deepomatic_rpc, import_rpc_package
 from .common import Empty, Queue, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError, DeepoCLIException
