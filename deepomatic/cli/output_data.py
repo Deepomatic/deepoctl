@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os
 import sys
 import json
@@ -199,6 +201,7 @@ class ImageOutputData(OutputData):
             pass
         finally:
             write_frame_to_disk(frame, path)
+
 
 class VideoOutputData(OutputData):
     @classmethod
