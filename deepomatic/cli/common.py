@@ -2,17 +2,17 @@ import io
 import os
 import cv2
 import logging
+
 try:
     from Queue import Empty, Full, Queue, LifoQueue
 except ImportError:
     from queue import Empty, Full, Queue, LifoQueue  # noqa: F401
 
 try:
-    # python 2
     import urlparse
 except ImportError:
-    # python3
     import urllib.parse as urlparse
+
 
 LOGGER = logging.getLogger(__name__)
 SUPPORTED_IMAGE_INPUT_FORMAT = ['.bmp', '.jpeg', '.jpg', '.jpe', '.png', '.tif', '.tiff']
@@ -43,10 +43,7 @@ class TqdmToLogger(io.StringIO):
 
 def clear_queue(queue):
     with queue.mutex:
-        if isinstance(queue, LifoQueue):
-            queue.queue = []
-        else:
-            queue.queue.clear()
+        queue.queue.clear()
 
 
 def write_frame_to_disk(frame, path):
