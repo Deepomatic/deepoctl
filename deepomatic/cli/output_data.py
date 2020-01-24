@@ -416,6 +416,7 @@ class DirectoryOutputData(OutputData):
         path = os.path.join(root_dir, "{}{}".format(frame.name, ext))
         write_frame_to_disk(frame, path)
 
+
 @requires_deepomatic_rpc
 class GRPCOutputData(OutputData):
     class DeepoServiceStub(object):
@@ -428,7 +429,7 @@ class GRPCOutputData(OutputData):
                 path,
                 request_serializer=rpc.buffers.protobuf.cli.Message_pb2.Message.SerializeToString,
                 response_deserializer=rpc.buffers.protobuf.cli.Message_pb2.Message.FromString,
-        )
+            )
 
     @classmethod
     def is_valid(cls, descriptor):
@@ -444,7 +445,7 @@ class GRPCOutputData(OutputData):
             raise DeepoCLIException("Cannot parse the descriptor for grpc output. It should have the `grpc://HOST:PORT` format")
 
         self._queue = Queue()
-        
+
         try:
             import grpc
         except ImportError:
@@ -456,7 +457,6 @@ class GRPCOutputData(OutputData):
             self._stream = self._stub.stream.future(iter(self._queue.get, None))
         except grpc.FutureTimeoutError:
             raise DeepoCLIException("Cannot connect to gRPC server at %s" % self._grpc_url)
-
 
     def close(self):
         if self._channel is not None:
