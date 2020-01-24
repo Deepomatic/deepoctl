@@ -11,7 +11,7 @@ except ImportError:
 try:
     import urlparse
 except ImportError:
-    import urllib.parse as urlparse # noqa: F401
+    import urllib.parse as urlparse  # noqa: F401
 
 
 LOGGER = logging.getLogger(__name__)
