@@ -431,7 +431,7 @@ class GRPCOutputData(OutputData):
             Args:
             channel: A grpc.Channel.
             """
-            self.Stream = channel.stream_unary(
+            self.stream = channel.stream_unary(
                 path,
                 request_serializer=rpc.buffers.protobuf.cli.Message_pb2.Message.SerializeToString,
                 response_deserializer=rpc.buffers.protobuf.cli.Message_pb2.Message.FromString,
@@ -454,14 +454,15 @@ class GRPCOutputData(OutputData):
         
         try:
             import grpc
+        except ImportError:
+            raise DeepoCLIException("gRPC is not installed")
+        try:
             self._channel = grpc.insecure_channel('%s' % self._grpc_url)
             grpc.channel_ready_future(self._channel).result(timeout=5)
             self._stub = GRPCOutputData.DeepoServiceStub(self._channel, self._grpc_path)
-            self._stream = self._stub.Stream.future(iter(self._queue.get, None))
-        except ImportError:
-            raise DeepoCLIException("gRPC is not installed")
+            self._stream = self._stub.stream.future(iter(self._queue.get, None))
         except grpc.FutureTimeoutError:
-            raise DeepoCLIException(f"Cannot connect to gRPC server at {self._grpc_url}")
+            raise DeepoCLIException("Cannot connect to gRPC server at %s" % self._grpc_url)
 
 
     def close(self):
