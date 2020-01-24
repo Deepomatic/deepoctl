@@ -8,7 +8,7 @@ import logging
 import traceback
 from .thread_base import Thread
 from .workflow.rpc_workflow import requires_deepomatic_rpc, import_rpc_package
-from .common import Empty, Queue, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
+from .common import Empty, Queue, write_frame_to_disk, urlparse, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError, DeepoCLIException
 
@@ -23,13 +23,6 @@ try:
     write_bytes_to_stdout = sys.stdout.buffer.write
 except AttributeError:
     write_bytes_to_stdout = sys.stdout.write
-
-try:
-    # python 2
-    import urlparse
-except ImportError:
-    # python3
-    import urllib.parse as urlparse
 
 
 def save_json_to_file(json_data, json_path):
