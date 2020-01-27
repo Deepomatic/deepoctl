@@ -1,10 +1,12 @@
 import os
 import cv2
 import sys
+import time
 import json
 import logging
 import threading
 from tqdm import tqdm
+from itertools import cycle
 
 from .cmds.infer import (PrepareInferenceThread, ResultInferenceGreenlet,
                          SendInferenceGreenlet)
@@ -24,9 +26,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 def get_input(descriptor, kwargs):
-    if descriptor is None:
+    if descriptor is None or len(descriptor) == 0:
         raise DeepoInputError('No input specified. use -i flag')
-    elif os.path.exists(descriptor):
+    if len(descriptor) > 1:
+        return MultipleStreamInputData(descriptor, **kwargs)
+    elif len(descriptor) == 1:
+        descriptor = descriptor[0]
+    if os.path.exists(descriptor):
         if os.path.isfile(descriptor):
             # Single image file
             if ImageInputData.is_valid(descriptor):
@@ -504,3 +510,164 @@ class StudioJsonInputData(InputData):
 
     def is_infinite(self):
         return False
+
+
+
+class VideoCaptureThreading(object):
+    def __init__(self, src=0):
+        self.src = src
+        self._last_read = None
+        self._video_fps = 0
+        self.cap = None
+        self.started = False
+        self.frame_requested = threading.Event()
+        self.frame_ready = threading.Event()
+        self.frame_consumed = threading.Event()
+
+    def isOpened(self):
+        if self.cap is None:
+            return False
+        return self.cap.isOpened()
+
+    def get(self, var):
+        return self.cap.get(var)
+
+    def set(self, var1, var2):
+        self.cap.set(var1, var2)
+
+    def _update_video_fps(self):
+        last = self._last_read
+        now = time.time()
+        self._last_read = now
+        if last is not None:
+            dt = now - last
+            self._last_read = now
+            alpha = 0.8
+            self._video_fps = (1 - alpha) / dt + alpha * self._video_fps
+            logging.debug('measured fps: %f' % self._video_fps)
+
+    def start(self):
+        if self.started:
+            print('[!] Threaded video capturing has already been started.')
+            return None
+        self.started = True
+        self.thread = threading.Thread(target=self.update, args=(), daemon=True)
+        self.thread.start()
+        return self
+
+    def update(self):
+        self.cap = cv2.VideoCapture(self.src)
+        self.grabbed, self.frame = self.cap.read()
+
+        while self.started:
+            self.frame_ready.clear()
+            self.cap.grab()
+            self._update_video_fps()
+            self.frame_consumed.clear()
+            if self.frame_requested.is_set():
+                self.decoded, self.frame = self.cap.retrieve()
+                self.frame_ready.set()
+                self.frame_consumed.wait()
+        self.cap.release()
+
+    def reconnect(self):
+        # TODO: lock
+        self.cap = cv2.VideoCapture(self.src)
+
+    def read(self):
+        self.frame_requested.set()
+        self.frame_ready.wait()
+        self.frame_requested.clear()
+        if self.decoded:
+            decoded, frame = self.decoded, self.frame.copy()
+        else:
+            decoded, frame = False, None
+        self.frame_consumed.set()
+        return decoded, frame
+
+    def stop(self):
+        self.frame_consumed.set()
+        self.frame_requested.clear()
+        self.started = False
+        self.thread.join()
+
+    def __exit__(self, exec_type, exc_value, traceback):
+        self.cap.release()
+
+class MultipleStreamInputData(StreamInputData):
+    def __init__(self, descriptor, **kwargs):
+        self._caps = {}
+        self._camera = None
+        self._first = True
+        self._last_read = 0
+        super(MultipleStreamInputData, self).__init__(descriptor, **kwargs)
+
+    def __iter__(self):
+        if not self._first:
+            self._open_video()
+        self._first = False
+        self._i = 0
+        self._frames_to_skip = 0
+        self._should_skip_fps = self._video_fps
+        return self
+
+    def _open_video(self, raise_exc=True):
+        self._stop_video(raise_exc=False)
+        self._caps = {
+            i: VideoCaptureThreading(_descriptor).start() for i, _descriptor in enumerate(self._descriptor)
+        }
+        self._camera = cycle(self._caps.keys())
+        return True
+
+    def _stop_video(self, raise_exc=True):
+        for cap in self._caps.values():
+            cap.stop()
+        if raise_exc:
+            raise StopIteration()
+
+    def _grab_next(self):
+        pass
+        # print('grab')
+        # return
+        # for cap in self._caps.values():
+        #     grabbed = cap.grab()
+        #     if not grabbed:
+        #         self._stop_video()
+        #         # TODO: do not disconnect all
+
+    def _decode_next(self):
+        camera_name = next(self._camera)
+        cap = self._caps[camera_name]
+        # print('reading frame from %s' % (camera_name))
+        # decoded, frame = cap.retrieve()
+        # print('read frame from %s: %s' % (camera_name, decoded))
+        decoded, frame = cap.read()
+        if not decoded:
+            cap.reconnect()
+            return self._decode_next()
+        else:
+            self._i += 1
+            frame = Frame(self._name % self._i, self._filename, frame, self._i)
+            frame.camera_name = camera_name
+            return frame
+
+    def _read_next(self):
+        self._grab_next()
+        return self._decode_next()
+
+    def get_fps(self):
+        self._video_fps = 30
+        if not self._kwargs_fps:
+            self._extract_fps = self._video_fps
+            logging.debug('No --input_fps specified, using raw video fps of {}'.format(self._video_fps))
+        elif self._kwargs_fps < self._video_fps:
+            self._extract_fps = self._kwargs_fps
+            logging.debug('Using user-specified --input_fps of {} instead of raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
+        else:
+            self._extract_fps = self._video_fps
+            logging.debug('User-specified --input_fps of {} specified but using maximum raw video fps of {}'.format(self._kwargs_fps, self._video_fps))
+
+        return self._extract_fps
+
+    def __del__(self):
+        self._stop_video(False)

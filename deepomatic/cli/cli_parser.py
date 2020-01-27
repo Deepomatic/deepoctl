@@ -105,7 +105,7 @@ def argparser_init():
     # Define input group  for infer draw blur
     for cmd in ['infer', 'draw', 'blur', 'noop']:
         group = input_groups[cmd]
-        group.add_argument('-i', '--input', required=True,
+        group.add_argument('-i', '--input', required=True, nargs='+',
                            help="Input path, either an image (*{}), a video (*{}), a directory, a stream (*{}),"
                            " or a Studio json (*.json). If the given path is a directory,"
                            " it will recursively run inference on all the supported files"

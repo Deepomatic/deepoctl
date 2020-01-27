@@ -7,7 +7,7 @@ import cv2
 import logging
 import traceback
 from .thread_base import Thread
-from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
+from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT, packing
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
@@ -46,6 +46,8 @@ def get_output(descriptor, kwargs):
             return StdOutputData(**kwargs)
         elif descriptor == 'window':
             return DisplayOutputData(**kwargs)
+        elif descriptor == 'multi':
+            return MultiDisplayOutputData(**kwargs)
         else:
             raise DeepoUnknownOutputError("Unknown output '{}'".format(descriptor))
     else:
@@ -410,3 +412,45 @@ class DirectoryOutputData(OutputData):
         # Finally write the image to file with its name
         path = os.path.join(root_dir, "{}{}".format(frame.name, ext))
         write_frame_to_disk(frame, path)
+
+
+class MultiDisplayOutputData(OutputData):
+    def __init__(self, **kwargs):
+        super(MultiDisplayOutputData, self).__init__(None, **kwargs)
+        self._fps = kwargs['output_fps']
+        self._window_name = 'Deepomatic'
+        self._fullscreen = kwargs.get('fullscreen', False)
+        self._frames = {}
+        if self._fullscreen:
+            cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty(self._window_name,
+                                  cv2.WND_PROP_FULLSCREEN,
+                                  cv2.WINDOW_FULLSCREEN)
+
+    def output_frame(self, frame):
+        if frame.output_image is None:
+            LOGGER.warning('No frame to output.')
+        else:
+
+            predictions = frame.predictions
+            try:
+                self._frames[frame.camera_name] = frame.image if frame.output_image is None else frame.output_image
+                multi_frame = packing(self._frames.values())
+            except Exception as e:
+                print(e)
+                multi_frame = frame.image if frame.output_image is None else frame.output_image
+
+            cv2.imshow(self._window_name, multi_frame)
+            try:
+                ms = 1000 // int(self._fps)
+            except Exception:
+                ms = 1
+            if cv2.waitKey(ms) & 0xFF == ord('q'):
+                cv2.destroyAllWindows()
+                cv2.waitKey(1)
+                sys.exit()
+
+    def close(self):
+        if cv2.waitKey(0) & 0xFF == ord('q'):
+            cv2.destroyAllWindows()
+            cv2.waitKey(1)
