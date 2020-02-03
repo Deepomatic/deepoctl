@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import argparse
-from .cmds import infer, studio, camera, parser_helpers
+from .cmds import infer, studio, parser_helpers
 from .version import __version__, __title__
 
 
@@ -60,20 +60,13 @@ def argparser_init():
     studio_subparser.required = True
     studio.setup_cmd_line_subparser(studio_subparser)
 
-    # Initialize subparser: camera
-    help_msg = "Camera server related commands"
-    camera_parser = subparsers.add_parser('camera', help=help_msg, description=help_msg)
-    camera_subparser = camera_parser.add_subparsers(dest='camera_command', help='')
-    camera_subparser.required = True
-    camera.setup_cmd_line_subparser(camera_subparser)
-
     # Add verbose for all commands
     # TODO: put this in parent parser when infer commands are not in the root parser
     # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
     for parser in inference_parsers.values():
         parser_helpers.add_verbose_param(parser)
 
-    for parser in [studio_parser, camera_parser]:
+    for parser in [studio_parser]:
         parser_helpers.add_verbose_param(parser)
 
     return argparser
