@@ -8,10 +8,9 @@ from ..exceptions import (DeepoCLICredentialsError,
                           SendInferenceError,
                           ResultInferenceError,
                           ResultInferenceTimeout)
-from ..common import (SUPPORTED_FILE_INPUT_FORMAT, SUPPORTED_IMAGE_INPUT_FORMAT,
-                      SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_PROTOCOLS_INPUT,
-                      SUPPORTED_VIDEO_INPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT,
-                      Queue, TqdmToLogger)
+from ..common import (SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_IMAGE_OUTPUT_FORMAT,
+                      SUPPORTED_PROTOCOLS_INPUT, SUPPORTED_VIDEO_INPUT_FORMAT,
+                      SUPPORTED_VIDEO_OUTPUT_FORMAT, Queue, TqdmToLogger)
 
 from ..thread_base import QUEUE_MAX_SIZE, MainLoop, Pool, Thread, Greenlet
 from . import parser_helpers

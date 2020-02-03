@@ -1,8 +1,8 @@
 # Common parsers functions used by various commands
-
 COMMON_GROUPS = {
     'input', 'output'
 }
+
 
 def add_common_cmd_group(parser, label):
     assert label in COMMON_GROUPS
