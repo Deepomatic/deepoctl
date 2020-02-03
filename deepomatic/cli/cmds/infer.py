@@ -317,6 +317,13 @@ def setup_cmd_line_parsers(inference_parsers):
     inference_parsers['blur'].set_defaults(func=lambda args:
                                            input_loop(args, BlurImagePostprocessing(**args)))
 
+    # Add verbose for all commands
+    # TODO: put this in parent parser when infer commands are not in the root parser
+    # And remove all calls to add_verbose_param
+    # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
+    for parser in inference_parsers.values():
+        parser_helpers.add_verbose_param(parser)
+
     # Define input group for infer draw blur noop
     for cmd in ['infer', 'draw', 'blur', 'noop']:
         # Define argument groups for easier reading

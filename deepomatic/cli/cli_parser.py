@@ -60,15 +60,6 @@ def argparser_init():
     studio_subparser.required = True
     studio.setup_cmd_line_subparser(studio_subparser)
 
-    # Add verbose for all commands
-    # TODO: put this in parent parser when infer commands are not in the root parser
-    # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
-    for parser in inference_parsers.values():
-        parser_helpers.add_verbose_param(parser)
-
-    for parser in [studio_parser]:
-        parser_helpers.add_verbose_param(parser)
-
     return argparser
 
 

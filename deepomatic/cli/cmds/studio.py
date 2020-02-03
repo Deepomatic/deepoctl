@@ -130,7 +130,6 @@ def setup_cmd_line_subparser(studio_subparser):
     group.add_argument('-d', '--dataset', required=True, help="Deepomatic Studio dataset name.", type=str)
 
     input_group = parser_helpers.add_common_cmd_group(add_images_parser, 'input')
-
     # Define input group for add_images
     input_group.add_argument('-i', '--input', type=str, nargs='+', required=True,
                              help="One or several input path, either an image or video file (*{}),"
@@ -139,7 +138,13 @@ def setup_cmd_line_subparser(studio_subparser):
                              ))
     input_group.add_argument('--json', dest='json_file', action='store_true',
                              help='Look for JSON files instead of images.')
+    parser_helpers.add_recursive_param(input_group)
 
     add_images_parser.add_argument('--set_metadata_path', dest='set_metadata_path',
                                    action='store_true',
                                    help='Add the relative path as metadata.')
+
+    # TODO: put this in parent parser when infer commands are not in the root parser
+    # And remove all calls to add_verbose_param
+    # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
+    parser_helpers.add_verbose_param(add_images_parser)
