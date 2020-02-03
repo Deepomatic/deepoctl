@@ -50,7 +50,7 @@ def argparser_init():
     desc_mgs = help_msg + " Typical usage is: deepo blur -i img.png -o pred.json draw.png -r 12345"
     inference_parsers['blur'] = subparsers.add_parser('blur', help=help_msg, description=desc_mgs)
 
-    # TODO: infer, draw, blur and noop should be in a common command (like studio and cameras)
+    # TODO: infer, draw, blur and noop should be in a common command (like studio)
     infer.setup_cmd_line_parsers(inference_parsers)
 
     # Initialize subparser: studio
