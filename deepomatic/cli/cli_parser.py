@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import argparse
-from .cmds import infer, studio, parser_helpers
+from .cmds import infer, studio
 from .version import __version__, __title__
 
 

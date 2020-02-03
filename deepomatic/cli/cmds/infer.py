@@ -319,10 +319,10 @@ def setup_cmd_line_parsers(inference_parsers):
 
     # Add verbose for all commands
     # TODO: put this in parent parser when infer commands are not in the root parser
-    # And remove all calls to add_verbose_param
+    # And remove all calls to add_verbose_argument
     # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
     for parser in inference_parsers.values():
-        parser_helpers.add_verbose_param(parser)
+        parser_helpers.add_verbose_argument(parser)
 
     # Define input group for infer draw blur noop
     for cmd in ['infer', 'draw', 'blur', 'noop']:
@@ -341,7 +341,7 @@ def setup_cmd_line_parsers(inference_parsers):
                            " some frames will be discarded to simulate an input of the given FPS.", default=None)
         group.add_argument('--skip_frame', type=int, help="Number of frame to skip between two frames from the input."
                            " It can be combined with input_fps", default=0)
-        parser_helpers.add_recursive_param(group)
+        parser_helpers.add_recursive_argument(group)
 
     output_groups = {}
     # Define output group for infer draw blur noop

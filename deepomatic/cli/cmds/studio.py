@@ -138,13 +138,13 @@ def setup_cmd_line_subparser(studio_subparser):
                              ))
     input_group.add_argument('--json', dest='json_file', action='store_true',
                              help='Look for JSON files instead of images.')
-    parser_helpers.add_recursive_param(input_group)
+    parser_helpers.add_recursive_argument(input_group)
 
     add_images_parser.add_argument('--set_metadata_path', dest='set_metadata_path',
                                    action='store_true',
                                    help='Add the relative path as metadata.')
 
     # TODO: put this in parent parser when infer commands are not in the root parser
-    # And remove all calls to add_verbose_param
+    # And remove all calls to add_verbose_argument
     # https://stackoverflow.com/questions/7498595/python-argparse-add-argument-to-multiple-subparsers
-    parser_helpers.add_verbose_param(add_images_parser)
+    parser_helpers.add_verbose_argument(add_images_parser)
