@@ -1,5 +1,8 @@
+import os
 from gevent.monkey import patch_all
-patch_all(thread=False, time=False)  # NOQA
+
+if os.getenv('DEEPOMATIC_CLI_GEVENT_MONKEY_PATCH', '1') == '1':
+    patch_all(thread=False, time=False)  # NOQA
 
 from .version import __version__
 

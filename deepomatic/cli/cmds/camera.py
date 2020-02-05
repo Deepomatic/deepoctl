@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import os
+import uuid
 import logging
 from contextlib import contextmanager
 from deepomatic.api.http_helper import HTTPHelper
+from ..workflow.rpc_workflow import import_rpc_package
 from . import parser_helpers
 from ..version import __title__, __version__
 from ..common import (SUPPORTED_IMAGE_OUTPUT_FORMAT,
@@ -20,6 +22,33 @@ DEFAULT_USER_AGENT_PREFIX = user_agent_prefix = '{}/{}'.format(
 CLIENT = None
 
 ###############################################################################
+
+
+class Client(HTTPHelper):
+    def __init__(self, **kwargs):
+        super(Client, self).__init__(user_agent_prefix=DEFAULT_USER_AGENT_PREFIX,
+                                     version=None, **kwargs)
+
+    def setup_host(self, host, verify_ssl):
+        if host is None:
+            host = os.environ['CAMERA_SERVER_URL']
+        if verify_ssl is None:
+            verify_ssl = os.getenv('CAMERA_SERVER_VERIFY_TLS', '1') == '1'
+
+        if not host.endswith('/'):
+            host += '/'
+
+        self.verify_ssl = verify_ssl
+        self.host = host
+
+    def setup_credentials(self):
+        # No credentials
+        pass
+
+    def default_headers(self):
+        return {
+            'User-Agent': self.user_agent,
+        }
 
 
 class CameraCtrl(object):
@@ -48,10 +77,7 @@ class CameraCtrl(object):
 def get_client():
     global CLIENT
     if CLIENT is None:
-        camera_server_url = os.environ['CAMERA_SERVER_URL']
-        CLIENT = HTTPHelper(host=camera_server_url,
-                            user_agent_prefix=DEFAULT_USER_AGENT_PREFIX,
-                            version=None)
+        CLIENT = Client()
     return CLIENT
 
 
@@ -61,19 +87,19 @@ def get_camera_ctrl():
 
 @contextmanager
 def start_stop_camera(name):
-    LOGGER.info("Starting camera")
+    LOGGER.info("Starting camera '{}'".format(name))
     get_camera_ctrl().start(name)
     try:
         yield
     except Exception:
-        LOGGER.info("Stopping camera")
+        LOGGER.info("Stopping camera '{}'".format(name))
         get_camera_ctrl().stop(name)
         raise
 
 
 @contextmanager
 def temp_camera(name, address):
-    LOGGER.info("Adding camera")
+    LOGGER.info("Adding camera '{}'".format(name))
     camera = get_camera_ctrl().add(name, address)
     name = camera['name']
 
@@ -81,15 +107,15 @@ def temp_camera(name, address):
         with start_stop_camera(name):
             yield camera
     except Exception:
-        LOGGER.info("Deleting camera")
+        LOGGER.info("Deleting camera '{}'".format(name))
         get_camera_ctrl().delete(name)
         raise
 
 
 def add_start_camera(name, address):
-    LOGGER.info("Adding camera")
+    LOGGER.info("Adding camera '{}'".format(name))
     get_camera_ctrl().add(name, address)
-    LOGGER.info("Starting camera")
+    LOGGER.info("Starting camera '{}'".format(name))
     get_camera_ctrl().start(name)
 
 
@@ -123,27 +149,20 @@ def stream(args):
 
 
 def infer(args):
-    with temp_camera(args.camera_name, args.camera_address):
-        # get_camera_results()
+    rpc, protobuf = import_rpc_package(should_raise=True)
+    name = str(uuid.uuid4())
+    with temp_camera(name, args.camera_address):
+        # TODO: print(get_camera_results())
+        # Output json ?
         pass
 
 
 def draw(args):
-    with temp_camera(args.camera_name, args.camera_address):
-        # draw_camera_results()
+    rpc, protobuf = import_rpc_package(should_raise=True)
+    name = str(uuid.uuid4())
+    with temp_camera(name, args.camera_address):
+        # TODO: draw_camera_results() # With json ?
         pass
-
-    # - draw results
-    # - Disable gevent ?
-
-    # deepo camera add name -a rtsp://
-    # deepo camera start name
-    # deepo camera stop  name
-    # deepo camera delete name
-    # deepo camera list
-
-    # deepo camera infer -a rtsp:// -n name
-    # deepo camera draw -a rtsp:// -n name
 
 
 def add_parser(camera_subparser, parsers, subcmd, help_msg, add_name=True):
@@ -159,14 +178,17 @@ def add_parser(camera_subparser, parsers, subcmd, help_msg, add_name=True):
     return parser
 
 
-def setup_cmd_line_subparser(camera_subparser):
+def add_address_argument(parser):
+    parser.add_argument('-a', '--address', dest='camera_address', type=str,
+                        required=True, help='Address of the camera stream (must be a URL).')
 
+
+def setup_cmd_line_subparser(camera_subparser):
     parsers = []
 
     # Add camera
     parser = add_parser(camera_subparser, parsers, 'add', 'Add a camera.')
-    parser.add_argument('-a', '--address', dest='camera_address', type=str,
-                        required=True, help='Address of the camera (must be a URL).')
+    add_address_argument(parser)
 
     # start, stop, delete camera
     for subcmd in ['start', 'stop', 'delete']:
@@ -183,17 +205,21 @@ def setup_cmd_line_subparser(camera_subparser):
     help_msg = ('Add and start a temporary camera then prints aggregated inference results. '
                 'When the user asks to the process (KeyboardInterrupt), '
                 'the camera is stopped and deleted before exiting.')
-    add_parser(camera_subparser, parsers, 'infer', help_msg, add_name=False)
+    parser = add_parser(camera_subparser, parsers, 'infer', help_msg, add_name=False)
+    add_address_argument(parser)
 
     # Draw
     help_msg = ('Add and start a temporary camera then draws aggregated inference results. '
                 'When the user asks to the process (KeyboardInterrupt), '
                 'the camera is stopped and deleted before exiting.')
     parser = add_parser(camera_subparser, parsers, 'draw', help_msg, add_name=False)
+    add_address_argument(parser)
     output_group = parser_helpers.add_common_cmd_group(parser, 'output')
-    output_group.add_argument('-o', '--outputs', required=True, nargs='+', help="Output path, either an image (*{}),"
-                              " a video (*{}), a json (*.json) or a directory.".format(', *'.join(SUPPORTED_IMAGE_OUTPUT_FORMAT),
-                                                                                       ', *'.join(SUPPORTED_VIDEO_OUTPUT_FORMAT)))
+    help_msg = "Output path, either an image (*{}), a video (*{}), a json (*.json) or a directory.".format(
+        ', *'.join(SUPPORTED_IMAGE_OUTPUT_FORMAT),
+        ', *'.join(SUPPORTED_VIDEO_OUTPUT_FORMAT)
+    )
+    output_group.add_argument('-o', '--outputs', required=True, nargs='+', help=help_msg)
 
     for parser in parsers:
         # TODO: put this in parent parser when infer commands are not in the root parser
