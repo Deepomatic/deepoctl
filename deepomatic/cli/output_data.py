@@ -4,10 +4,13 @@ import os
 import sys
 import json
 import cv2
+import io
 import logging
 import traceback
-from .thread_base import Thread
-from .common import Empty, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
+from socketserver import ThreadingMixIn
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from .thread_base import Thread, Condition
+from .common import Empty, Queue, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
 
@@ -46,6 +49,8 @@ def get_output(descriptor, kwargs):
             return StdOutputData(**kwargs)
         elif descriptor == 'window':
             return DisplayOutputData(**kwargs)
+        elif descriptor == 'browser':
+            return BrowserOutputData(**kwargs)
         else:
             raise DeepoUnknownOutputError("Unknown output '{}'".format(descriptor))
     else:
@@ -410,3 +415,108 @@ class DirectoryOutputData(OutputData):
         # Finally write the image to file with its name
         path = os.path.join(root_dir, "{}{}".format(frame.name, ext))
         write_frame_to_disk(frame, path)
+
+
+class BrowserOutputData(OutputData):
+    class StreamingServer(ThreadingMixIn, HTTPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+        timeout = 1
+
+    class StreamingOutput(object):
+        def __init__(self):
+            self.frame = None
+            self.buffer = io.BytesIO()
+            self.condition = Condition()
+
+        def write(self, buf):
+            if buf.startswith(b'\xff\xd8'):
+                # New frame, copy the existing buffer's content and notify all
+                # clients it's available
+                self.buffer.truncate()
+                with self.condition:
+                    self.frame = self.buffer.getvalue()
+                    self.condition.notify_all()
+                self.buffer.seek(0)
+            return self.buffer.write(buf)
+
+    OUTPUT = StreamingOutput()
+
+    class StreamingHandler(BaseHTTPRequestHandler):
+        PAGE="""\
+            <html>
+                <head>
+                    <title>Deepocli Browser Output</title>
+                </head>
+                <body>
+                    <img src="stream.mjpg" width="100%" height="100%" />
+                </body>
+            </html>
+            """
+
+
+        def do_GET(self):
+            if self.path == '/':
+                self.send_response(301)
+                self.send_header('Location', '/index.html')
+                self.end_headers()
+            elif self.path == '/index.html':
+                content = BrowserOutputData.StreamingHandler.PAGE.encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html')
+                self.send_header('Content-Length', len(content))
+                self.end_headers()
+                self.wfile.write(content)
+            elif self.path == '/stream.mjpg':
+                self.send_response(200)
+                self.send_header('Age', 0)
+                self.send_header('Cache-Control', 'no-cache, private')
+                self.send_header('Pragma', 'no-cache')
+                self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+                self.end_headers()
+                output = BrowserOutputData.OUTPUT
+                try:
+                    while True:
+                        with output.condition:
+                            output.condition.wait()
+                            frame = output.frame
+                        self.wfile.write(b'--FRAME\r\n')
+                        self.send_header('Content-Type', 'image/jpeg')
+                        self.send_header('Content-Length', len(frame))
+                        self.end_headers()
+                        self.wfile.write(frame)
+                        self.wfile.write(b'\r\n')
+                except Exception as e:
+                    traceback.print_exc()
+                    logging.warning(
+                        'Removed streaming client %s: %s',
+                        self.client_address, str(e))
+            else:
+                self.send_error(404)
+                self.end_headers()
+
+    def __init__(self, **kwargs):
+        super(BrowserOutputData, self).__init__("browser", **kwargs)
+        self._running = True
+        self.server_address = ('', 8000)
+
+        from threading import Thread
+        self.thread = Thread(name="server", target=self.run)
+        self.thread.start()
+
+    def run(self):
+        httpd = BrowserOutputData.StreamingServer(self.server_address, BrowserOutputData.StreamingHandler)
+        while self._running:
+            httpd.handle_request()
+
+    def close(self):
+        self._running = False
+        self.thread.join()
+
+    def output_frame(self, frame):
+        if frame.output_image is None:
+            LOGGER.warning('No frame to output.')
+        else:
+            _, buf = cv2.imencode('.jpg', frame.output_image)
+            buf_bytes = buf.tobytes()
+            BrowserOutputData.OUTPUT.write(buf_bytes)

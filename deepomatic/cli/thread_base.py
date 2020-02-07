@@ -5,7 +5,7 @@ import gevent
 import signal
 from contextlib import contextmanager
 from gevent.threadpool import ThreadPool
-from threading import Lock
+from threading import Lock, Condition
 from .common import clear_queue, Full, Empty
 from deepomatic.api.exceptions import BadStatus
 from .exceptions import DeepoCLIException
