@@ -421,7 +421,6 @@ class BrowserOutputData(OutputData):
     class StreamingServer(ThreadingMixIn, HTTPServer):
         allow_reuse_address = True
         daemon_threads = True
-        timeout = 1
 
     class StreamingOutput(object):
         def __init__(self):
