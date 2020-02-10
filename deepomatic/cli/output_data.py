@@ -9,7 +9,7 @@ import logging
 import traceback
 from socketserver import ThreadingMixIn
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from .thread_base import Thread, Condition
+from .thread_base import Thread, Condition, ThreadPool
 from .common import Empty, Queue, write_frame_to_disk, SUPPORTED_IMAGE_OUTPUT_FORMAT, SUPPORTED_VIDEO_OUTPUT_FORMAT
 from .cmds.studio_helpers.vulcan2studio import transform_json_from_vulcan_to_studio
 from .exceptions import DeepoUnknownOutputError, DeepoSaveJsonToFileError
@@ -498,20 +498,24 @@ class BrowserOutputData(OutputData):
     def __init__(self, **kwargs):
         super(BrowserOutputData, self).__init__("browser", **kwargs)
         self._running = True
-        self.server_address = ('', 8000)
+        self.server_address = ('', int(os.getenv('PORT', '8000')))
 
-        from threading import Thread
-        self.thread = Thread(name="server", target=self.run)
-        self.thread.start()
+        self._httpd = None
+
+        self._thread = ThreadPool(1)
+        self._thread.spawn(self.run)
 
     def run(self):
-        httpd = BrowserOutputData.StreamingServer(self.server_address, BrowserOutputData.StreamingHandler)
-        while self._running:
-            httpd.handle_request()
+        LOGGER.info('Serving output to 0.0.0.0:{}.'.format(self.server_address[1]))
+        self._httpd = BrowserOutputData.StreamingServer(self.server_address, BrowserOutputData.StreamingHandler)
+        self._httpd.serve_forever()
 
     def close(self):
-        self._running = False
-        self.thread.join()
+        if self._httpd:
+            self._httpd.shutdown()
+        if self._thread:
+            self._thread.join()
+
 
     def output_frame(self, frame):
         if frame.output_image is None:
