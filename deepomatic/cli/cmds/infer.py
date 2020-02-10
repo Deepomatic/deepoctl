@@ -353,6 +353,8 @@ def setup_cmd_line_parsers(inference_parsers):
                            " a video (*{}), a json (*.json) or a directory.".format(', *'.join(SUPPORTED_IMAGE_OUTPUT_FORMAT),
                                                                                     ', *'.join(SUPPORTED_VIDEO_OUTPUT_FORMAT)))
         group.add_argument('--output_fps', type=int, help="FPS used for output video reconstruction.", default=None)
+        group.add_argument('--fd', type=int)
+        group.add_argument('--endpoint', type=str)
 
     # Define output group for infer draw blur
     for cmd in ['infer', 'draw', 'blur']:

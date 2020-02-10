@@ -7,6 +7,9 @@ import cv2
 import io
 import logging
 import traceback
+from functools import partial
+from gevent import socket
+from gevent.threadpool import ThreadPool
 from socketserver import ThreadingMixIn
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from .thread_base import Thread, Condition, ThreadPool
@@ -439,20 +442,21 @@ class BrowserOutputData(OutputData):
                 self.buffer.seek(0)
             return self.buffer.write(buf)
 
-    OUTPUT = StreamingOutput()
-
     class StreamingHandler(BaseHTTPRequestHandler):
-        PAGE="""\
-            <html>
-                <head>
-                    <title>Deepocli Browser Output</title>
-                </head>
-                <body>
-                    <img src="stream.mjpg" width="100%" height="100%" />
-                </body>
-            </html>
-            """
-
+        def __init__(self, endpoint, output, *args, **kwargs):
+            self._endpoint = endpoint
+            self._output = output
+            self._PAGE=f"""\
+                <html>
+                    <head>
+                        <title>Deepocli Browser Output</title>
+                    </head>
+                    <body>
+                        <img src="{endpoint}" width="100%" height="100%" />
+                    </body>
+                </html>
+                """
+            super().__init__(*args, **kwargs)
 
         def do_GET(self):
             if self.path == '/':
@@ -460,25 +464,24 @@ class BrowserOutputData(OutputData):
                 self.send_header('Location', '/index.html')
                 self.end_headers()
             elif self.path == '/index.html':
-                content = BrowserOutputData.StreamingHandler.PAGE.encode('utf-8')
+                content = self._PAGE.encode('utf-8')
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html')
                 self.send_header('Content-Length', len(content))
                 self.end_headers()
                 self.wfile.write(content)
-            elif self.path == '/stream.mjpg':
+            elif self.path == '/%s' % self._endpoint:
                 self.send_response(200)
                 self.send_header('Age', 0)
                 self.send_header('Cache-Control', 'no-cache, private')
                 self.send_header('Pragma', 'no-cache')
                 self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
                 self.end_headers()
-                output = BrowserOutputData.OUTPUT
                 try:
                     while True:
-                        with output.condition:
-                            output.condition.wait()
-                            frame = output.frame
+                        with self._output.condition:
+                            self._output.condition.wait()
+                            frame = self._output.frame
                         self.wfile.write(b'--FRAME\r\n')
                         self.send_header('Content-Type', 'image/jpeg')
                         self.send_header('Content-Length', len(frame))
@@ -497,7 +500,9 @@ class BrowserOutputData(OutputData):
     def __init__(self, **kwargs):
         super(BrowserOutputData, self).__init__("browser", **kwargs)
         self._running = True
-        self.server_address = ('', int(os.getenv('PORT', '8000')))
+        self._fd = kwargs.get('fd')
+        self._endpoint = kwargs.get('endpoint', 'stream.mjpg')
+        self._output = BrowserOutputData.StreamingOutput()
 
         self._httpd = None
 
@@ -505,8 +510,17 @@ class BrowserOutputData(OutputData):
         self._thread.spawn(self.run)
 
     def run(self):
-        LOGGER.info('Serving output to 0.0.0.0:{}.'.format(self.server_address[1]))
-        self._httpd = BrowserOutputData.StreamingServer(self.server_address, BrowserOutputData.StreamingHandler)
+        request_handler = partial(BrowserOutputData.StreamingHandler, self._endpoint, self._output)
+        if self._fd:
+            self._socket = socket.fromfd(int(self._fd), socket.AF_INET, socket.SOCK_STREAM)
+            self._server_address = self._socket.getsockname()
+        else:
+            self._server_address = ('', int(os.getenv('PORT', '8000')))
+
+        LOGGER.info('Serving output to 0.0.0.0:{}.'.format(self._server_address[1]))
+        self._httpd = BrowserOutputData.StreamingServer(self._server_address, request_handler, self._fd is None)
+        if self._fd is not None:
+            self._httpd.socket = self._socket
         self._httpd.serve_forever()
 
     def close(self):
@@ -522,4 +536,4 @@ class BrowserOutputData(OutputData):
         else:
             _, buf = cv2.imencode('.jpg', frame.output_image)
             buf_bytes = buf.tobytes()
-            BrowserOutputData.OUTPUT.write(buf_bytes)
+            self._output.write(buf_bytes)
