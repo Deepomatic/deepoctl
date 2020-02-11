@@ -20,6 +20,7 @@ def import_rpc_package(should_raise=False):
         from deepomatic.rpc.helpers.v07_proto import create_recognition_command_mix  # noqa: F401
         from deepomatic.rpc.helpers.proto import create_v07_images_command  # noqa: F401
         from deepomatic.rpc.buffers.protobuf.cli.Message_pb2 import Message  # noqa: F401
+        from deepomatic.rpc.buffers.protobuf.workflows.WorkflowExecution_pb2 import WorkflowRequest, WorkflowResponse  # noqa: F401
         from google import protobuf  # noqa: F401
         import google.protobuf.json_format  # noqa: F401
     except ImportError as e:

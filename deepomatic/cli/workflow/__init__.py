@@ -1,6 +1,7 @@
 import logging
 from .cloud_workflow import CloudRecognition
 from .rpc_workflow import RpcRecognition
+from .worker_workflow import RpcWorkflow
 from .json_workflow import JsonRecognition
 from ..exceptions import DeepoWorkflowError
 
@@ -11,6 +12,7 @@ LOGGER = logging.getLogger(__name__)
 def get_workflow(args):
     # Retrieve recognition arguments
     recognition_id = args.get('recognition_id')
+    grpc_url = args.get('grpc_url')
     amqp_url = args.get('amqp_url')
     routing_key = args.get('routing_key')
     pred_from_file = args.get('pred_from_file')
@@ -19,6 +21,11 @@ def get_workflow(args):
     if pred_from_file:
         LOGGER.debug('Using JSON workflow with recognition_id {}'.format(recognition_id))
         return JsonRecognition(recognition_id, pred_from_file)
+    elif grpc_url:
+        print('Using worker-workflow')
+        LOGGER.debug('Using worker-workflow with'
+                     ' gRPC_url {}, amqp_url {} and routing_key {}'.format(recognition_id, amqp_url, routing_key))
+        return RpcWorkflow(grpc_url, amqp_url, routing_key)
     elif all([amqp_url, routing_key]):
         LOGGER.debug('Using RPC workflow with'
                      ' recognition_id {}, amqp_url {} and routing_key {}'.format(recognition_id, amqp_url, routing_key))

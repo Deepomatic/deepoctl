@@ -380,6 +380,7 @@ def setup_cmd_line_parsers(inference_parsers):
     # Define onprem group for infer draw blur
     for cmd in ['infer', 'draw', 'blur']:
         group = inference_parsers[cmd].add_argument_group('on-premises arguments')
+        group.add_argument('-w', '--grpc_url', help="Workflow Server url for on-premises deployments.")
         group.add_argument('-u', '--amqp_url', help="AMQP url for on-premises deployments.")
         group.add_argument('-k', '--routing_key', help="Recognition routing key for on-premises deployments.")
 
