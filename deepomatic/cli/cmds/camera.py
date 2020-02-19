@@ -29,7 +29,7 @@ class Client(HTTPHelper):
         super(Client, self).__init__(user_agent_prefix=DEFAULT_USER_AGENT_PREFIX,
                                      version=None, **kwargs)
 
-    def setup_host(self, host, verify_ssl):
+    def _setup_host(self, host, verify_ssl):
         if host is None:
             host = os.environ['CAMERA_SERVER_URL']
         if verify_ssl is None:
@@ -41,7 +41,7 @@ class Client(HTTPHelper):
         self.verify_ssl = verify_ssl
         self.host = host
 
-    def setup_credentials(self):
+    def _setup_credentials(self):
         # No credentials
         pass
 
