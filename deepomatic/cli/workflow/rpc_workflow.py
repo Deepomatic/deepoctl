@@ -39,9 +39,9 @@ def requires_deepomatic_rpc(cls):
             # checks that rpc is installed and up-to-date
             import_rpc_package(should_raise=True)
             try:
-                return old_init(self, *args, **kwargs)
+                old_init(self, *args, **kwargs)
             except Exception:
-                return old_init(self)
+                old_init(self)
 
         return __init__
     cls.__init__ = override_init(cls.__init__)
