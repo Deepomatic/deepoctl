@@ -6,7 +6,7 @@ import logging
 from .vulcan2studio import transform_json_from_vulcan_to_studio
 from ...thread_base import Greenlet
 from ...common import SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_VIDEO_INPUT_FORMAT
-from ...json_schema import is_valid_studio_json, is_valid_vulcan_json
+from ...json_schema import JSONSchemaType, validate_json
 from ...exceptions import DeepoOpenJsonError, DeepoUploadJsonError
 
 
@@ -32,6 +32,8 @@ class UploadImageGreenlet(Greenlet):
         meta = {}
         for file in batch:
             try:
+                self.current_messages.report_message()
+
                 # Update file
                 files.update({file['key']: open(file['path'], 'rb')})
 
@@ -115,14 +117,21 @@ class DatasetFiles(object):
                 except ValueError:
                     raise DeepoOpenJsonError("Upload JSON file {} is not a valid JSON file".format(upload_file))
 
-                # If it's a Studio json, use it directly
-                if is_valid_studio_json(json_data):
-                    LOGGER.warning("Studio JSON {} validated".format(upload_file))
-                    studio_json = json_data
-                # If it's a Vulcan json, transform it to Studio
-                elif is_valid_vulcan_json(json_data):
-                    LOGGER.warning("Vulcan JSON {} validated and transformed to Studio format".format(upload_file))
-                    studio_json = transform_json_from_vulcan_to_studio(json_data)
+                is_valid_json, error, schema_type = validate_json(json_data)
+                if is_valid_json:
+                    # If it's a Studio json, use it directly
+                    if schema_type == JSONSchemaType.STUDIO:
+                        studio_json = json_data
+                        LOGGER.warning("{} JSON {} validated".format(schema_type, upload_file))
+                    # If it's a Vulcan json, transform it to Studio
+                    elif schema_type == JSONSchemaType.VULCAN:
+                        studio_json = transform_json_from_vulcan_to_studio(json_data)
+                        LOGGER.warning("Vulcan JSON {} validated and transformed to Studio format".format(upload_file))
+                # If the JSON is not valid but its type is known, print the error
+                elif schema_type is not None and error is not None:
+                    LOGGER.warning("Error with {} JSON : {} in the instance {}".format(schema_type, error.message, list(error.path)))
+                    raise DeepoUploadJsonError("Upload JSON file {} is not a proper {} JSON file".format(upload_file, schema_type))
+                # If the schema type is not known, print the error message
                 else:
                     raise DeepoUploadJsonError("Upload JSON file {} is neither a proper Studio or Vulcan JSON file".format(upload_file))
 

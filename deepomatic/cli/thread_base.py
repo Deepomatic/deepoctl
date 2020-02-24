@@ -85,6 +85,13 @@ class CurrentMessages(object):
         with self.lock():
             self.nb_errors += nb_errors
 
+    def report_message(self):
+        self.report_messages(1)
+
+    def report_messages(self, nb_messages):
+        with self.lock():
+            self.nb_added_messages += nb_messages
+
     def forget_message(self, msg, count_as_error=True):
         try:
             with self.lock():

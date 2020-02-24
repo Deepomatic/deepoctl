@@ -7,7 +7,7 @@ from .common import (SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_PROTOCOLS_INPUT,
                      SUPPORTED_VIDEO_INPUT_FORMAT, clear_queue)
 from .exceptions import DeepoFPSError, DeepoInputError, DeepoVideoOpenError
 from .frame import Frame
-from .json_schema import is_valid_studio_json
+from .json_schema import validate_json, JSONSchemaType
 from .thread_base import Thread
 
 
@@ -356,7 +356,9 @@ class StudioJsonInputData(InputData):
         try:
             with open(descriptor) as json_file:
                 studio_json = json.load(json_file)
-            return is_valid_studio_json(studio_json)
+            is_valid, error, schema_type = validate_json(studio_json)
+            is_valid_studio_json = True if is_valid and schema_type == JSONSchemaType.STUDIO else False
+            return is_valid_studio_json
         except Exception:
             return False
 
