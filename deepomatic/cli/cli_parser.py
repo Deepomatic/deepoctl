@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import argparse
-from .cmds import infer, studio
+from .cmds import AVAILABLE_COMMANDS, infer, studio
 from .version import __version__, __title__
 
 
@@ -10,6 +10,7 @@ class ParserWithHelpOnError(argparse.ArgumentParser):
     """
     Modifies argparser to display the help whenever an error is triggered.
     """
+
     def error(self, message):
         sys.stderr.write('error: %s\n' % message)
         self.print_help()
@@ -60,12 +61,18 @@ def argparser_init():
     studio_subparser.required = True
     studio.setup_cmd_line_subparser(studio_subparser)
 
-    return argparser
+    return argparser, subparsers
 
 
 def run(args):
-    # Initialize the argparser
-    argparser = argparser_init()
+    # deprecated commands (TODO: migrate to RunCommand() ?)
+    argparser, subparsers = argparser_init()
+
+    for command in AVAILABLE_COMMANDS:
+        command.setup(subparsers)
+
+    subparsers.required = True
+
     args = argparser.parse_args(args)
 
     # Update the log level accordingly
