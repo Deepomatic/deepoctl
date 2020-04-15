@@ -1,2 +1,2 @@
 from gevent.monkey import patch_all
-patch_all(thread=False, time=False)
+patch_all(thread=False, time=False, subprocess=False)
