@@ -12,8 +12,11 @@ class CreateCommand(Command):
         parser.add_argument('name', type=str, help="site name")
         parser.add_argument('--app-id', required=True, type=str, help="app id")
         parser.add_argument('--description', required=False, type=str, help="", default="")
+        parser.add_argument('--install', action='store_true')
         return parser
 
-    def run(self, name, app_id, description, **kwargs):
+    def run(self, name, app_id, description, install, **kwargs):
         site = SiteManager().create(name, app_id, description)
         print(site)
+        if (site.get('id') and install):
+            SiteManager().install(site.get('id'))

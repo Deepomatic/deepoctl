@@ -19,14 +19,7 @@ class SiteManager(object):
         return self._client.get('/sites/{}'.format(site_id))
 
     def create(self, name, app_version_id, description=''):
-        data = {
-            'name': name,
-            'desc': description,
-            'app_version_id': app_version_id,
-        }
-
-        site = self._client.post('/sites', data=data)
-        return site
+        raise NotImplementedError('Please use the web interface')
 
     def current(self):
         return str(self._repo.head.reference)
