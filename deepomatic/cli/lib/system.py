@@ -15,15 +15,15 @@ class SystemManager(object):
         self.check_command(["docker", "run", "--gpus", "all", "nvidia/cuda:9.0-base", "nvidia-smi"], command_message="nvidia-docker")
 
         print("=== Check deepomatic api accessibility")
-        self.check_command(["curl", "https://api.deepomatic.com"], command_message="Deepomatic API",
+        self.check_command(["curl", "-Lf", "https://api.deepomatic.com"], command_message="Deepomatic API",
                            success_message="is reachable", error_message="is not reachable")
 
         print("=== Check deepomatic run docker images")
-        self.check_command(["docker", "image", "inspect", "deepomatic/workflow-server:master-53"],
+        self.check_command(["docker", "image", "inspect", "deepomatic/run-neural-worker:0.5.0-native"],
                            command_message="Neural worker image", success_message="is available", error_message="is not availabe")
-        self.check_command(["docker", "image", "inspect", "deepomatic/workflow-server:master-53"],
+        self.check_command(["docker", "image", "inspect", "deepomatic/run-workflow-server:0.5.0"],
                            command_message="Workflow server image", success_message="is available", error_message="is not availabe")
-        self.check_command(["docker", "image", "inspect", "deepomatic/camera-server:master-34"],
+        self.check_command(["docker", "image", "inspect", "deepomatic/run-camera-server:0.5.0"],
                            command_message="Camera server image", success_message="is available", error_message="is not availabe")
 
     def check_command(self, command,
