@@ -12,7 +12,7 @@ class PlatformManager(object):
     def __init__(self, client_cls=HTTPHelper):
         self.client = client_cls()
 
-    def create(self, app_name):
+    def create_app(self, app_name):
         # create directory
         try:
             os.makedirs(app_name)
@@ -34,7 +34,7 @@ class PlatformManager(object):
     def inspect(self, workflow_path):
         raise NotImplementedError()
 
-    def publish(self, workflow_path):
+    def publish_workflow(self, workflow_path):
         with open(workflow_path, 'r') as f:
             workflow = yaml.load(f, Loader=yaml.FullLoader)
 

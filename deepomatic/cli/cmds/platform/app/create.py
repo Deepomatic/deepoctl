@@ -13,4 +13,4 @@ class CreateCommand(Command):
         return parser
 
     def run(self, app_name, **kwargs):
-        PlatformManager().create(app_name)
+        PlatformManager().create_app(app_name)
