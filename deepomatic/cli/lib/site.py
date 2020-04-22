@@ -18,6 +18,11 @@ class SiteManager(object):
     def get(self, site_id):
         return self._client.get('/sites/{}'.format(site_id))
 
+    def get_docker_compose(self, site_id):
+        headers = self._client.setup_headers(content_type='application/yaml')
+        response = self._client.send_request(self._client.session.get, '{}/sites/{}/docker-compose'.format(self._client.resource_prefix, site_id), headers=headers)
+        return yaml.load(response.content.decode(), Loader=yaml.FullLoader)
+
     def create(self, name, app_version_id, description=''):
         raise NotImplementedError('Please use the web interface')
 
@@ -32,9 +37,7 @@ class SiteManager(object):
 
     def install(self, site_id):
         site = self.get(site_id)
-        headers = self._client.setup_headers(content_type='application/yaml')
-        response = self._client.send_request(self._client.session.get, '{}/sites/{}/docker-compose'.format(self._client.resource_prefix, site_id), headers=headers)
-        docker_compose = yaml.load(response.content.decode(), Loader=yaml.FullLoader)
+        docker_compose = self.get_docker_compose(site_id)
         try:
             # create branch
             self._repo.git.checkout(site_id, orphan=True)
@@ -94,11 +97,11 @@ class SiteManager(object):
         if (self._repo.head.commit.message == site['app']['id']):
             return
 
-        docker_compose = convert_to_docker_compose(site)
+        docker_compose = self.get_docker_compose(site_id)
 
         docker_compose_path = os.path.join(self._repo.working_tree_dir, 'docker-compose.yml')
         with open(docker_compose_path, 'w') as f:
-            f.write(yaml.dump(docker_compose))
+            f.write(docker_compose)
 
         # add to index
         self._repo.index.add([docker_compose_path])
