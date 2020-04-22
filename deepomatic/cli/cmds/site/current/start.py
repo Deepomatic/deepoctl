@@ -7,4 +7,7 @@ class StartCommand(_CurrentSiteCommand):
     """
 
     def run(self, **kwargs):
-        SiteManager().start()
+        manager = SiteManager()
+        print('Starting site', manager.current())
+        manager.start()
+        print('Site started')

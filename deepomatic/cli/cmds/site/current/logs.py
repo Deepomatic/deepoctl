@@ -6,5 +6,5 @@ class LogsCommand(_CurrentSiteCommand):
         get the logs of the running site
     """
 
-    def run(self):
+    def run(self, **kwargs):
         SiteManager().logs()

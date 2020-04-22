@@ -7,8 +7,7 @@ class UseCommand(_SiteCommand):
     """
 
     def run(self, site_id, **kwargs):
-        SiteManager().use(site_id)
-
-        # TODO: feedback
-        # print('Now using', site_id)
-        # print(site_id, 'does not exist')
+        if SiteManager().use(site_id):
+            print('Now using', site_id)
+        else:
+            print(site_id, 'is not installed')

@@ -7,4 +7,8 @@ class InstallCommand(_SiteCommand):
     """
 
     def run(self, site_id, **kwargs):
-        SiteManager().install(site_id)
+        app_id = SiteManager().install(site_id)
+        if app_id is None:
+            print('Site', site_id, 'already installed')
+        else:
+            print('Site', site_id, 'installed with app', app_id)

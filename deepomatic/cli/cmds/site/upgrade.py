@@ -7,7 +7,10 @@ class UpgradeCommand(_CurrentSiteCommand):
     """
 
     def run(self, **kwargs):
-        SiteManager().upgrade()
-        # TODO: feedback
-        # print('Site is up-to-date')
-        # print('Site', site_id, 'upgraded')
+        manager = SiteManager()
+        site_id = manager.current()
+        app_id = manager.upgrade()
+        if app_id is None:
+            print('Site is up-to-date')
+        else:
+            print('Site', site_id, 'upgraded with app', app_id)

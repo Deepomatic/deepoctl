@@ -7,5 +7,5 @@ class ShowCommand(_CurrentSiteCommand):
     """
 
     def run(self, **kwargs):
-        print('site:', SiteManager.current())
-        print('app', SiteManager.current_app())
+        print('site:', SiteManager().current())
+        print('app', SiteManager().current_app())
