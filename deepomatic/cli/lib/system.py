@@ -1,3 +1,4 @@
+import os
 import subprocess
 
 
@@ -32,7 +33,7 @@ class SystemManager(object):
         try:
             if command_message is None:
                 command_message = command if isinstance(command, str) else ' '.join(command)
-            with open("/dev/null", "w") as null:
+            with open(os.devnull, "w") as null:
                 result = subprocess.call(command, stdout=null, stderr=null)
             if result != 0:
                 raise OSError
