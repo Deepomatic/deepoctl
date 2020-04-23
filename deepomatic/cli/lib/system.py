@@ -42,4 +42,4 @@ class SystemManager(object):
             print(error_icon, '\t', '\033[1m' + command_message + '\033[0m', error_message)
 
     def setup(self):
-        pass
+        raise NotImplementedError()
