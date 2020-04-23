@@ -14,4 +14,3 @@ class LoadCommand(Command):
 
     def run(self, archive, **kwargs):
         SiteManager().load(archive)
-        # TODO: feedback
