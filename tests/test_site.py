@@ -92,6 +92,8 @@ def generate_site(name, app_version_id, desc):
 class MockApi(object):
     def __init__(self, *args, **kwargs):
         self.sites = {}
+        self.session = self
+        self.resource_prefix = ''
 
     def get(self, path):
         return self.sites.get(path.split('/')[-1])
@@ -106,6 +108,23 @@ class MockApi(object):
 
     def upgrade(self, site_id, app_id):
         self.sites[site_id]['app']['id'] = app_id
+
+    def setup_headers(self, content_type):
+        pass
+
+    def send_request(self, f, path, headers):
+        class Response(object):
+            class Content(object):
+                def __init__(self, content):
+                    self.content = content
+
+                def decode(self):
+                    return self.content
+
+            def __init__(self, content):
+                self.content = Response.Content(content)
+
+        return Response('docker-compose')  # TODO: real docker-compose ?
 
 
 @contextmanager
@@ -132,7 +151,7 @@ class TestSite(object):
         with setup() as manager:
             # create site
             app_version_id = str(uuid4())
-            site = generate_site(name='site1', app_version_id=app_version_id, desc='description')
+            site = manager._client.post('/sites', dict(name='site1', app_version_id=app_version_id, desc='description'))
             site_id = site['id']
             app_id = site['app']['id']
 
@@ -159,7 +178,7 @@ class TestSite(object):
 
             # install another site
             app_version_id2 = str(uuid4())
-            site2 = generate_site(name='site2', app_version_id=app_version_id2, desc='description')
+            site2 = manager._client.post('/sites', dict(name='site2', app_version_id=app_version_id2, desc='description'))
             site_id2 = site2['id']
             app_id2 = site2['app']['id']
 

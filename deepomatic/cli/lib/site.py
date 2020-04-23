@@ -30,6 +30,7 @@ def makedirs(folder, *args, **kwargs):
             # folder is a file, raise OSError just like os.makedirs() in Py3
             raise
 
+
 class SiteManager(object):
     def __init__(self, path=DEEPOMATIC_SITE_PATH, client_cls=HTTPHelper):
         makedirs(path)
