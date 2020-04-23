@@ -132,7 +132,7 @@ class TestSite(object):
         with setup() as manager:
             # create site
             app_version_id = str(uuid4())
-            site = generate_site(name='site1', app_version_id=app_version_id, description='description')
+            site = generate_site(name='site1', app_version_id=app_version_id, desc='description')
             site_id = site['id']
             app_id = site['app']['id']
 
@@ -159,7 +159,7 @@ class TestSite(object):
 
             # install another site
             app_version_id2 = str(uuid4())
-            site2 = generate_site(name='site2', app_version_id=app_version_id2, description='description')
+            site2 = generate_site(name='site2', app_version_id=app_version_id2, desc='description')
             site_id2 = site2['id']
             app_id2 = site2['app']['id']
 
