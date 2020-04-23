@@ -21,11 +21,11 @@ class SystemManager(object):
 
         print("=== Check deepomatic run docker images")
         self.check_command(["docker", "image", "inspect", "deepomatic/run-neural-worker:0.5.0-native"],
-                           command_message="Neural worker image", success_message="is available", error_message="is not availabe")
+                           command_message="Neural worker image", success_message="is available", error_message="is not available")
         self.check_command(["docker", "image", "inspect", "deepomatic/run-workflow-server:0.5.0"],
-                           command_message="Workflow server image", success_message="is available", error_message="is not availabe")
+                           command_message="Workflow server image", success_message="is available", error_message="is not available")
         self.check_command(["docker", "image", "inspect", "deepomatic/run-camera-server:0.5.0"],
-                           command_message="Camera server image", success_message="is available", error_message="is not availabe")
+                           command_message="Camera server image", success_message="is available", error_message="is not available")
 
     def check_command(self, command,
                       success_icon="\u2713", error_icon="\u2717",
