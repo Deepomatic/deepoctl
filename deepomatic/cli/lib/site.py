@@ -113,7 +113,6 @@ class SiteManager(object):
 
     def use(self, site_id):
         if hasattr(self._repo.heads, site_id):
-            # TODO: stop current site
             getattr(self._repo.heads, site_id).checkout()
             return True
         else:
@@ -122,9 +121,16 @@ class SiteManager(object):
 
     def _run_docker_compose(self, *args):
         site_id = self.current()
-        return subprocess.call(' '.join(["docker-compose", "-f", os.path.join(DEEPOMATIC_SITE_PATH, "docker-compose.yml")] + list(args)),
-            env={
-                "DEEPOMATIC_SITE_ID": site_id
-            },
-            shell=True
-        )
+        command = ' '.join(["docker-compose", "-f", os.path.join(DEEPOMATIC_SITE_PATH, "docker-compose.yml")] + list(args))
+        env = {
+            "DEEPOMATIC_SITE_ID": site_id
+        }
+        p = subprocess.Popen(command, env=env, shell=True)
+        try:
+            p.wait()
+        except KeyboardInterrupt:
+            try:
+                p.terminate()
+            except OSError:
+                pass
+            p.wait()
