@@ -1,4 +1,6 @@
+import errno
 import os
+import os.path
 import shutil
 import subprocess
 
@@ -8,9 +10,29 @@ from deepomatic.api.http_helper import HTTPHelper
 DEEPOMATIC_SITE_PATH = os.path.join(os.environ['HOME'], '.deepomatic', 'sites')
 
 
+def makedirs(folder, *args, **kwargs):
+    # python2/3 compatible implementation of os.makedirs(exist_ok=True)
+    # cf https://stackoverflow.com/a/60371380
+    try:
+        return os.makedirs(folder, exist_ok=True, *args, **kwargs)
+    except TypeError:
+        # Unexpected arguments encountered
+        pass
+
+    try:
+        # Should work is TypeError was caused by exist_ok, eg., Py2
+        return os.makedirs(folder, *args, **kwargs)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
+        if os.path.isfile(folder):
+            # folder is a file, raise OSError just like os.makedirs() in Py3
+            raise
+
 class SiteManager(object):
     def __init__(self, path=DEEPOMATIC_SITE_PATH, client_cls=HTTPHelper):
-        os.makedirs(path, exist_ok=True)
+        makedirs(path)
         self._repo = Repo.init(path)
         self._client = client_cls()
 
