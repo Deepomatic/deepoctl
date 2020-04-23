@@ -19,7 +19,11 @@ class SiteManager(object):
 
     def get_docker_compose(self, site_id):
         headers = self._client.setup_headers(content_type='application/yaml')
-        response = self._client.send_request(self._client.session.get, '{}/sites/{}/docker-compose'.format(self._client.resource_prefix, site_id), headers=headers)
+        response = self._client.send_request(
+            self._client.session.get,
+            '{}/sites/{}/docker-compose'.format(self._client.resource_prefix, site_id),
+            headers=headers)
+
         return response.content.decode()
 
     def create(self, name, app_version_id, description=''):
