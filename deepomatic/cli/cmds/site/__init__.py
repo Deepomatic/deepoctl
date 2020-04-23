@@ -8,7 +8,6 @@ class SiteCommand(Command):
     """
 
     from .use import UseCommand
-    from .create import CreateCommand
     from .list import ListCommand
     from .load import LoadCommand
     from .save import SaveCommand
