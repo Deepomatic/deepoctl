@@ -93,7 +93,7 @@ WORKFLOW_YAML_TEMPLATE = {
         "name": "workflow",
         "nodes": [
             {
-                "name": "input",
+                "name": "image_input",
                 "type": "Input",
                 "args": {
                     "type": "Image"
