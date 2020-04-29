@@ -9,7 +9,7 @@ class _SiteCommand(Command):
 
     def setup(self, subparsers):
         parser = super(_SiteCommand, self).setup(subparsers)
-        parser.add_argument('site_id', type=str, help="site id", default=None)
+        parser.add_argument('site_id', type=str, help="site id")
         return parser
 
 
