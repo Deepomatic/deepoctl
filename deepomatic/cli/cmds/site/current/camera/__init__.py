@@ -17,7 +17,7 @@ class _CameraCommand(Command):
 
 class CameraCommand(Command):
     """
-        control the Camera server
+        Control the Camera server
     """
 
     class AddCommand(Command):
