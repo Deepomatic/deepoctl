@@ -3,7 +3,7 @@ from ...utils import Command
 
 class CurrentCommand(Command):
     """
-        control the current site
+        Control the current site
     """
 
     from .start import StartCommand
