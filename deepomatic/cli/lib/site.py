@@ -7,7 +7,7 @@ import subprocess
 from git import Repo
 from deepomatic.api.http_helper import HTTPHelper
 
-DEEPOMATIC_SITE_PATH = os.path.join(os.environ['HOME'], '.deepomatic', 'sites')
+DEEPOMATIC_SITE_PATH = os.path.join(os.path.expanduser('~'), '.deepomatic', 'sites')
 
 
 def makedirs(folder, *args, **kwargs):
