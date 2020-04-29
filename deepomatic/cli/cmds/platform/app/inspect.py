@@ -9,8 +9,7 @@ class InspectCommand(Command):
 
     def setup(self, subparsers):
         parser = super(InspectCommand, self).setup(subparsers)
-        parser.add_argument('workflow_path', type=str, help="")
-        parser.add_argument('-f', '--file', type=str, help="workflow file name", default="workflow.yaml")
+        parser.add_argument('workflow_path', type=str, help="Path to the directory containing the workflow's files")
         return parser
 
     def run(self, workflow_path, **kwargs):

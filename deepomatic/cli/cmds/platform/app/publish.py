@@ -9,7 +9,7 @@ class PublishCommand(Command):
 
     def setup(self, subparsers):
         parser = super(PublishCommand, self).setup(subparsers)
-        parser.add_argument('workflow_path', type=str, help="")
+        parser.add_argument('workflow_path', type=str, help="Path to the directory containing the workflow's files")
         return parser
 
     def run(self, workflow_path, **kwargs):
