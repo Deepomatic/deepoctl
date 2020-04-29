@@ -6,7 +6,7 @@ class SystemManager(object):
     def check(self):
         print("=== Check git, deepomatic-cli installations")
         self.check_command(["git", "--version"], command_message="git")
-        self.check_command(["deepo", "--version"], command_message="deepommatic-cli")
+        self.check_command(["deepo", "--version"], command_message="deepomatic-cli")
 
         print("=== Check docker, docker-compose and nvidia installation")
         self.check_command("docker", command_message="docker")
