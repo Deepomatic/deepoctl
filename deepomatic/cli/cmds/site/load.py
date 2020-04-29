@@ -9,7 +9,7 @@ class LoadCommand(Command):
 
     def setup(self, subparsers):
         parser = super(LoadCommand, self).setup(subparsers)
-        parser.add_argument('archive', type=str, help="path to archive", default=None)
+        parser.add_argument('archive', type=str, help="path to archive")
         return parser
 
     def run(self, archive, **kwargs):

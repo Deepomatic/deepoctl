@@ -8,7 +8,7 @@ class SaveCommand(_SiteCommand):
 
     def setup(self, subparsers):
         parser = super(SaveCommand, self).setup(subparsers)
-        parser.add_argument('archive_dst', type=str, help="path to archive", default=None)
+        parser.add_argument('archive_dst', type=str, help="path to archive")
         return parser
 
     def run(self, site_id, archive_dst, **kwargs):

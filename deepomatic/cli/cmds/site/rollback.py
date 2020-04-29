@@ -8,7 +8,7 @@ class RollbackCommand(_CurrentSiteCommand):
 
     def setup(self, subparsers):
         parser = super(RollbackCommand, self).setup(subparsers)
-        parser.add_argument('n', nargs='?', type=int, help="", default=1)
+        parser.add_argument('n', nargs='?', type=int, help="how far back to rollback", default=1)
         return parser
 
     def run(self, n, **kwargs):
