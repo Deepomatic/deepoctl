@@ -4,7 +4,7 @@ from .utils import SiteManager
 
 class LoadCommand(Command):
     """
-        load a site from an archive
+        Load a site from an archive
     """
 
     def setup(self, subparsers):

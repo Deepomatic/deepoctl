@@ -3,7 +3,7 @@ from .utils import _CurrentSiteCommand, SiteManager
 
 class UpgradeCommand(_CurrentSiteCommand):
     """
-        upgrade a site
+        Upgrade a site
     """
 
     def run(self, **kwargs):

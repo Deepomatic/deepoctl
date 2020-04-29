@@ -3,7 +3,7 @@ from .utils import SiteManager, _SiteCommand
 
 class UseCommand(_SiteCommand):
     """
-        use a site
+        Use a site
     """
 
     def run(self, site_id, **kwargs):

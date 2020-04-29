@@ -3,7 +3,7 @@ from .utils import _SiteCommand, SiteManager
 
 class SaveCommand(_SiteCommand):
     """
-        save a site to an archive
+        Save a site to an archive
     """
 
     def setup(self, subparsers):

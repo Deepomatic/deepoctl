@@ -3,7 +3,7 @@ from ..utils import _CurrentSiteCommand, SiteManager
 
 class StopCommand(_CurrentSiteCommand):
     """
-        stop the site
+        Stop the site
     """
 
     def run(self, **kwargs):

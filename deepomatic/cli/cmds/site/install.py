@@ -3,7 +3,7 @@ from .utils import _SiteCommand, SiteManager
 
 class InstallCommand(_SiteCommand):
     """
-        install a site
+        Install a site
     """
 
     def run(self, site_id, **kwargs):

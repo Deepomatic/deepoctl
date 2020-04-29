@@ -3,7 +3,7 @@ from .utils import _SiteCommand, SiteManager
 
 class UninstallCommand(_SiteCommand):
     """
-        uninstall a site
+        Uninstall a site
     """
 
     def run(self, site_id, **kwargs):

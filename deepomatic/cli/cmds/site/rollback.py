@@ -3,7 +3,7 @@ from .utils import _CurrentSiteCommand, SiteManager
 
 class RollbackCommand(_CurrentSiteCommand):
     """
-        rollback a site
+        Rollback a site
     """
 
     def setup(self, subparsers):

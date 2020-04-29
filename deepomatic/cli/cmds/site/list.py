@@ -4,7 +4,7 @@ from .utils import SiteManager
 
 class ListCommand(Command):
     """
-        get the list of installed sites
+        Get the list of installed sites
     """
 
     def run(self, **kwargs):
