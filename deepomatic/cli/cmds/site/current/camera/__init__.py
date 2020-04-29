@@ -6,7 +6,7 @@ manager = get_camera_ctrl()
 
 class _CameraCommand(Command):
     """
-        create a new site with the specified app
+        Base class for commands that requires the camera's name
     """
 
     def setup(self, subparsers):
