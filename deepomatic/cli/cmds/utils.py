@@ -1,4 +1,5 @@
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -32,3 +33,9 @@ class Command(object):
 
     def run(self, *args, **kwargs):
         print(type(self).__name__, args, kwargs)
+
+
+def valid_path(file_path):
+    if not os.path.exists(file_path):
+        raise IOError("'{}' file does not exist".format(file_path))
+    return file_path
