@@ -1,11 +1,15 @@
 import yaml
+import logging
+
 try:
     from builtins import FileExistsError
 except ImportError:
     FileExistsError = OSError
 
-from deepomatic.api.exceptions import BadStatus
 from deepomatic.api.http_helper import HTTPHelper
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PlatformManager(object):
@@ -20,32 +24,25 @@ class PlatformManager(object):
         if description is not None:
             data['desc'] = description
 
-        try:
-            ret = self.client.post('/sites', data=data)
-            print("New site created with id: {}".format(ret['id']))
-        except BadStatus:
-            print("Failed to create the site: {}".format(ret))
+        ret = self.client.post('/sites', data=data)
+        return "New site created with id: {}".format(ret['id'])
 
     def update_site(self, site_id, app_version_id):
         data = {
             'app_version_id': app_version_id
         }
 
-        try:
-            ret = self.client.patch('/sites/{}'.format(site_id), data=data)
-            print("Site {} updated".format(ret['id']))
-        except BadStatus:
-            print("Failed to update the site: {}".format(ret))
+        ret = self.client.patch('/sites/{}'.format(site_id), data=data)
+        return "Site {} updated".format(ret['id'])
+
+    def delete_site(self, site_id):
+        self.client.delete('/sites/{}'.format(site_id))
+        return "Site {} deleted".format(site_id)
 
     def create_app(self, name, description, workflow_path, custom_nodes_path):
 
-        files = {}
         with open(workflow_path, 'r') as f:
-            files['workflow_yaml'] = f
             workflow = yaml.safe_load(f)
-
-        if custom_nodes_path is not None:
-            files['custom_nodes_py'] = open(custom_nodes_path, 'r')
 
         # create using workflow server
         app_specs = [{
@@ -57,14 +54,31 @@ class PlatformManager(object):
         if description is not None:
             data_app['desc'] = description
 
-        try:
-            ret = self.client.post('/apps-workflow', data=data_app, files=files, content_type='multipart/mixed')
-            print("New app created with id: {}".format(ret['app_id']))
-        except BadStatus:
-            print("Failed to create the app: {}".format(ret))
+        with open(workflow_path, 'r') as w:
+            files = {'workflow_yaml': w}
+            if custom_nodes_path is not None:
+                with open(custom_nodes_path, 'r') as c:
+                    files['custom_nodes_py'] = c
+                    ret = self.client.post('/apps-workflow', data=data_app, files=files, content_type='multipart/mixed')
+            else:
+                ret = self.client.post('/apps-workflow', data=data_app, files=files, content_type='multipart/mixed')
+            return "New app created with id: {}".format(ret['app_id'])
 
-    def update_app(self, app_id):
-        NotImplementedError()
+    def update_app(self, app_id, name, description):
+        data = {}
+
+        if name is not None:
+            data['name'] = name
+
+        if description is not None:
+            data['desc'] = description
+
+        ret = self.client.patch('/apps/{}'.format(app_id), data=data)
+        return "App {} updated".format(ret['id'])
+
+    def delete_app(self, app_id):
+        self.client.delete('/apps/{}'.format(app_id))
+        return "App {} deleted".format(app_id)
 
     def create_app_version(self, app_id, name, description, version_ids):
         data = {
@@ -75,14 +89,24 @@ class PlatformManager(object):
         if description is not None:
             data['desc'] = description
 
-        try:
-            ret = self.client.post('/app-versions', data=data)
-            print("New app version created with id: {}".format(ret['id']))
-        except BadStatus:
-            print("Failed to create the app_version: {}".format(ret))
+        ret = self.client.post('/app-versions', data=data)
+        return "New app version created with id: {}".format(ret['id'])
 
-    def update_app_version(self, app_version_id):
-        NotImplementedError()
+    def update_app_version(self, app_version_id, name, description):
+        data = {}
+
+        if name is not None:
+            data['name'] = name
+
+        if description is not None:
+            data['desc'] = description
+
+        ret = self.client.patch('/app-versions/{}'.format(app_version_id), data=data)
+        return "App version {} updated".format(ret['id'])
+
+    def delete_app_version(self, app_version_id):
+        self.client.delete('/app-versions/{}'.format(app_version_id))
+        return "App version {} deleted".format(app_version_id)
 
     def infer(self, input):
         raise NotImplementedError()
@@ -90,30 +114,8 @@ class PlatformManager(object):
     def inspect(self, workflow_path):
         raise NotImplementedError()
 
-    def publish_workflow(self, workflow_path):
-        with open(workflow_path, 'r') as f:
-            workflow = yaml.load(f, Loader=yaml.FullLoader)
-
-        app_specs = [{
-            "queue_name": "{}.forward".format(node['name']),
-            "recognition_spec_id": node['args']['spec_id']
-        } for node in workflow['workflow']['nodes'] if node["type"] == "Recognition"]
-
-        data_app = {"name": workflow['workflow']['name'], "app_specs": app_specs}
-        files = {'workflow_yaml': open(workflow_path, 'r')}
-
-        try:
-            ret = self._client.post('/apps-workflow/', data=data_app, files=files, content_type='multipart/mixed')
-            print("New app created with id: {}".format(ret['id']))
-        except BadStatus:
-            print("Failed to create app: {}".format(ret))
-
     def train(self):
         raise NotImplementedError()
 
     def upload(self):
         raise NotImplementedError()
-
-    def validate(self):
-        # TODO: implement
-        return True
