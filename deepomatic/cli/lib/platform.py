@@ -16,29 +16,6 @@ class PlatformManager(object):
     def __init__(self, client_cls=HTTPHelper):
         self.client = client_cls()
 
-    def create_site(self, name, description, app_version_id):
-        data = {
-            'name': name,
-            'app_version_id': app_version_id
-        }
-        if description is not None:
-            data['desc'] = description
-
-        ret = self.client.post('/sites', data=data)
-        return "New site created with id: {}".format(ret['id'])
-
-    def update_site(self, site_id, app_version_id):
-        data = {
-            'app_version_id': app_version_id
-        }
-
-        ret = self.client.patch('/sites/{}'.format(site_id), data=data)
-        return "Site {} updated".format(ret['id'])
-
-    def delete_site(self, site_id):
-        self.client.delete('/sites/{}'.format(site_id))
-        return "Site {} deleted".format(site_id)
-
     def create_app(self, name, description, workflow_path, custom_nodes_path):
 
         with open(workflow_path, 'r') as f:
@@ -107,6 +84,14 @@ class PlatformManager(object):
     def delete_app_version(self, app_version_id):
         self.client.delete('/app-versions/{}'.format(app_version_id))
         return "App version {} deleted".format(app_version_id)
+
+    def create_service(self, **data):
+        ret = self.client.post('/services', data=data)
+        return "New service created with id: {}".format(ret['id'])
+
+    def delete_service(self, service_id):
+        self.client.delete('/services/{}'.format(service_id))
+        return "Service {} deleted".format(service_id)
 
     def infer(self, input):
         raise NotImplementedError()

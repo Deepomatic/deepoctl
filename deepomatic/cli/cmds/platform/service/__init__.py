@@ -1,11 +1,10 @@
 from ...utils import Command
 
 
-class SiteCommand(Command):
+class ServiceCommand(Command):
     """
-        Site related commands
+        Service related commands
     """
 
     from .create import CreateCommand
-    from .update import UpdateCommand
     from .delete import DeleteCommand
