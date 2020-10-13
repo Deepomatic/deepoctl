@@ -10,7 +10,13 @@ class _CameraServerCommand(Command):
     def run(self, camera_server_address, **args):
         self.manager = get_camera_ctrl(camera_server_address)
 
-class _CameraCommand(Command):
+    def print_camera(self, camera):
+        print("camera: {}".format(camera['name']))
+        for key, value in camera.items():
+            if key != "name":
+                print("\t{}: {}".format(key, value))
+
+class _CameraCommand(_CameraServerCommand):
     """
         Base class for commands that requires the camera's name
     """
@@ -52,7 +58,9 @@ class CameraCommand(Command):
             return parser
 
         def run(self, name, address, fps, tcp, udp, **kwargs):
-            print(manager.add(name, address))  # TODO: tcp/udp, fps
+            super(CameraCommand.AddCommand, self).run(**kwargs)
+            added = self.manager.add(name, address, fps, tcp)
+            self.print_camera(added)
 
     class RemoveCommand(_CameraCommand):
         """
@@ -60,7 +68,8 @@ class CameraCommand(Command):
         """
 
         def run(self, name, **kwargs):
-            print(manager.delete(name))
+            super(CameraCommand.RemoveCommand, self).run(**kwargs)
+            removed = self.manager.delete(name)
 
     class StartCommand(_CameraCommand):
         """
@@ -68,7 +77,8 @@ class CameraCommand(Command):
         """
 
         def run(self, name, **kwargs):
-            print(manager.start(name))
+            super(CameraCommand.StartCommand, self).run(**kwargs)
+            started = self.manager.start(name)
 
     class StopCommand(_CameraCommand):
         """
@@ -76,7 +86,8 @@ class CameraCommand(Command):
         """
 
         def run(self, name, **kwargs):
-            print(manager.stop(name))
+            super(CameraCommand.StopCommand, self).run(**kwargs)
+            stopped = self.manager.stop(name)
 
     class StatusCommand(_CameraCommand):
         """
@@ -84,12 +95,19 @@ class CameraCommand(Command):
         """
 
         def run(self, name, **kwargs):
-            print(manager.status(name))
+            super(CameraCommand.StatusCommand, self).run(**kwargs)
+            status = self.manager.get(name)
+            self.print_camera(status)
 
-    class ListCommand(Command):
+
+    class ListCommand(_CameraServerCommand):
         """
             List the cameras
         """
 
         def run(self, **kwargs):
-            print(manager.list())
+            super(CameraCommand.ListCommand, self).run(**kwargs)
+            cameras = self.manager.list()
+            print("Cameras:")
+            for camera in cameras:
+                self.print_camera(camera)
