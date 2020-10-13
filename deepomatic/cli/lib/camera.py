@@ -1,14 +1,8 @@
-import os
-import logging
-from contextlib import contextmanager
 from deepomatic.api.http_helper import HTTPHelper
 from ..version import __title__, __version__
 
 
 ###############################################################################
-
-
-LOGGER = logging.getLogger(__name__)
 
 DEFAULT_USER_AGENT_PREFIX = user_agent_prefix = '{}/{}'.format(
     __title__, __version__)

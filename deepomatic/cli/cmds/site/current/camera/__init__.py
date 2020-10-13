@@ -16,6 +16,7 @@ class _CameraServerCommand(Command):
             if key != "name":
                 print("\t{}: {}".format(key, value))
 
+
 class _CameraCommand(_CameraServerCommand):
     """
         Base class for commands that requires the camera's name
@@ -25,9 +26,6 @@ class _CameraCommand(_CameraServerCommand):
         parser = super(_CameraCommand, self).setup(subparsers)
         parser.add_argument('name', type=str, help="camera name")
         return parser
-
-
-
 
 
 class CameraCommand(Command):
@@ -69,7 +67,7 @@ class CameraCommand(Command):
 
         def run(self, name, **kwargs):
             super(CameraCommand.RemoveCommand, self).run(**kwargs)
-            removed = self.manager.delete(name)
+            self.manager.delete(name)
 
     class StartCommand(_CameraCommand):
         """
@@ -78,7 +76,7 @@ class CameraCommand(Command):
 
         def run(self, name, **kwargs):
             super(CameraCommand.StartCommand, self).run(**kwargs)
-            started = self.manager.start(name)
+            self.manager.start(name)
 
     class StopCommand(_CameraCommand):
         """
@@ -87,7 +85,7 @@ class CameraCommand(Command):
 
         def run(self, name, **kwargs):
             super(CameraCommand.StopCommand, self).run(**kwargs)
-            stopped = self.manager.stop(name)
+            self.manager.stop(name)
 
     class StatusCommand(_CameraCommand):
         """
