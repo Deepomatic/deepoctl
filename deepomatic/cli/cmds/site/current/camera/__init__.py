@@ -1,8 +1,14 @@
 from ....utils import Command
 from deepomatic.cli.lib.camera import get_camera_ctrl
 
-manager = get_camera_ctrl()
 
+class _CameraServerCommand(Command):
+    """
+        Base class for commands that calls the camera server
+    """
+
+    def run(self, camera_server_address, **args):
+        self.manager = get_camera_ctrl(camera_server_address)
 
 class _CameraCommand(Command):
     """
@@ -15,12 +21,20 @@ class _CameraCommand(Command):
         return parser
 
 
+
+
+
 class CameraCommand(Command):
     """
         Control the Camera server
     """
 
-    class AddCommand(Command):
+    def setup(self, subparsers):
+        parser = super(CameraCommand, self).setup(subparsers)
+        parser.add_argument('--camera_server_address', required=True, type=str, help="camera server address")
+        return parser
+
+    class AddCommand(_CameraServerCommand):
         """
             Add a camera
         """
