@@ -17,7 +17,7 @@ class CreateCommand(Command):
 
     def run(self, app_id, name, circus_watchers, **kwargs):
         if not circus_watchers and name in ['worker-nn', 'camera-server',
-                                            'workflow-server', 'customer-api']:
+                                            'workflow-server']:
             # It is important to set it for those services
             circus_watchers = [name]
         return PlatformManager().create_service(app_id=app_id, name=name,
