@@ -2,12 +2,13 @@ from .thread_base import CurrentMessages
 
 
 class Frame(object):
-    def __init__(self, name, filename, image, video_frame_index=None):
+    def __init__(self, name, filename, image, video_frame_index=None, absolute_video_frame_index=None):
         # The Frame object is used as a data exchanged in the different queues
         self.name = name  # name of the frame
         self.filename = filename  # the original filename from which the frame was extracted
         self.image = image  # an opencv loaded image (numpy array)
-        self.video_frame_index = video_frame_index  # index of the frame in the video sequence
+        self.video_frame_index = video_frame_index  # index of the frame in the output video sequence
+        self.absolute_video_frame_index = absolute_video_frame_index # index of the frame in the input video sequence
         self.frame_number = None  # frame_number since deepocli started (set by input_loop)
         self.inference_async_result = None  # an inference request object that will allow us to retrieve the predictions when ready
         self.predictions = None  # predictions result dict
@@ -15,8 +16,8 @@ class Frame(object):
         self.buf_bytes = None
 
     def __str__(self):
-        return '<Frame name={} filename={} frame_number={} video_frame_index={}>'.format(
-            self.name, self.filename, self.frame_number, self.video_frame_index)
+        return '<Frame name={} filename={} frame_number={} video_frame_index={} absolute_video_frame_index={}>'.format(
+            self.name, self.filename, self.frame_number, self.video_frame_index, self.absolute_video_frame_index)
 
 
 class CurrentFrames(CurrentMessages):
