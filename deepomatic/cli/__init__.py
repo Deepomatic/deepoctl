@@ -1,5 +1,5 @@
-from gevent.monkey import patch_all
-patch_all(thread=False, time=False, subprocess=False)  # NOQA
+from .gevent_monkey import patch_all
+patch_all()
 
 from .version import __version__
 
