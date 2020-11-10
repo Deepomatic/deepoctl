@@ -97,7 +97,6 @@ class CameraCommand(Command):
             status = self.manager.get(name)
             self.print_camera(status)
 
-
     class ListCommand(_CameraServerCommand):
         """
             List the cameras
