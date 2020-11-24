@@ -2,7 +2,6 @@
 
 set -xe
 export DEBIAN_FRONTEND="noninteractive"
-export PYENV_ROOT="/opt/pyenv"
 export PATH="/opt/pyenv/shims:/opt/pyenv/bin:$PATH"
 export PYENV_ROOT="/opt/pyenv"
 export PYENV_SHELL="bash"
@@ -35,7 +34,7 @@ export LANG=en_US.UTF-8
 
 # Install pyenv
 git clone -b "v1.2.21" --single-branch --depth 1 https://github.com/pyenv/pyenv.git $PYENV_ROOT
-python_versions=`cat ${CURRENT_DIR}/python-versions.txt`
+python_versions=`cat deploy/deepomatic-cli/python-versions.txt`
 # prepare all defined python versions for isolated testing
 for version in $python_versions; do
     pyenv install $version;
@@ -46,8 +45,11 @@ done
 unset PYENV_VERSION
 # prepare first defined python version for development
 pyenv global $python_versions
-pip install -r ${CURRENT_DIR}/requirements.dev.txt
-pip install -e .
+pip install -r deploy/deepomatic-cli/requirements.dev.txt
+pip install -r requirements.txt
+
+# Allow pip install in entrypoint when DMAKE_UID != 0
+chmod -R go=u $PYENV_ROOT
 
 find $PYENV_ROOT/versions -type d '(' -name '__pycache__' -o -name 'test' -o -name 'tests' ')' -exec rm -rf '{}' +
 find $PYENV_ROOT/versions -type f '(' -name '*.pyo' -o -name '*.exe' ')' -exec rm -f '{}' +
