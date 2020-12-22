@@ -86,9 +86,9 @@ class DatasetFiles(object):
             return self.flush_batch(url, batch)
         return batch
 
-    def fill_queue(self, files, project_name):
+    def fill_queue(self, files, org_slug, project_name):
         total_files = 0
-        url = 'v1-beta/datasets/{}/images/batch/'.format(project_name)
+        url = 'orgs/{}/datasets/{}/images/batch/'.format(org_slug, project_name)
         batch = []
 
         for upload_file in files:
@@ -133,4 +133,4 @@ class DatasetFiles(object):
             self._helper.get(request)
         except RuntimeError:
             raise RuntimeError("Can't find the project {}".format(project_name))
-        return self.fill_queue(files, project_name)
+        return self.fill_queue(files, org_slug, project_name)
