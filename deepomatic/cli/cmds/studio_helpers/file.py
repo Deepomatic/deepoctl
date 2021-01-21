@@ -108,7 +108,7 @@ class DatasetFiles(object):
                         line = json.loads(line)
                         is_valid_json, error, schema_type = validate_json(line)
                         if schema_type == JSONSchemaType.STUDIO_HEADER:
-                            pass
+                            self.post_header(org_slug, project_name, line)
                         elif schema_type == JSONSchemaType.STUDIO_INPUT:
                             input = line.pop('data')[0]
                             if 'file' in input:
@@ -134,3 +134,7 @@ class DatasetFiles(object):
         except RuntimeError:
             raise RuntimeError("Can't find the project {}".format(project_name))
         return self.fill_queue(files, org_slug, project_name)
+
+    def post_header(self, org_slug, project_name, project_header):
+        request = 'orgs/{}/projects/{}/create_views/'.format(org_slug, project_name)
+        self._helper.post(request, data=project_header)
