@@ -4,7 +4,7 @@ import json
 import uuid
 import logging
 from ...thread_base import Greenlet
-from ...common import SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_VIDEO_INPUT_FORMAT
+from ...common import SUPPORTED_IMAGE_INPUT_FORMAT
 from ...json_schema import JSONSchemaType, validate_json
 
 
