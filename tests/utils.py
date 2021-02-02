@@ -117,11 +117,6 @@ def save_json_to_file(json_data, json_pth):
 
 def patch_json_for_tests(image_path, studio_json, vulcan_json):
     """Update the image path in test files"""
-    # Patch studio JSON
-    # json_data = load_json_from_file(studio_json)
-    # json_data['images'][0]['location'] = image_path
-    # save_json_to_file(json_data, studio_json)
-
     # Patch vulcan JSON
     json_data = load_json_from_file(vulcan_json)
     json_data[0]['location'] = image_path
