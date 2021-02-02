@@ -336,4 +336,3 @@ class DeviceInputData(VideoInputData):
 
     def is_infinite(self):
         return True
-
