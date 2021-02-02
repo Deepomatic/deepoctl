@@ -1,13 +1,11 @@
 import os
 import cv2
-import json
 import logging
 
 from .common import (SUPPORTED_IMAGE_INPUT_FORMAT, SUPPORTED_PROTOCOLS_INPUT,
                      SUPPORTED_VIDEO_INPUT_FORMAT, clear_queue)
 from .exceptions import DeepoFPSError, DeepoInputError, DeepoVideoOpenError
 from .frame import Frame
-from .json_schema import validate_json, JSONSchemaType
 from .thread_base import Thread
 
 
